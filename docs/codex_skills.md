@@ -14,6 +14,15 @@ custom skill 本体は `~/.codex/skills` 配下に置き、プロジェクト側
   - ざっくりした依頼を実装可能な粒度まで詰めたいとき
   - 実装前に scope / acceptance criteria / implementation plan を整理したいとき
 
+### blog-audio-git-publish
+
+- path: `~/.codex/skills/blog-audio-git-publish`
+- 役割: `origin/main` と現在の作業状態を比較し、差分確認、明示的ステージ、コミット、`push` までを安全に進める
+- 使いどころ:
+  - リモートの `main` とローカル差分を確認してから反映したいとき
+  - いまの変更をどのファイルでコミットするか整理してから `push` したいとき
+  - この repo で定義されていない build / test / lint を捏造せずに公開フローを進めたいとき
+
 ## Installed Skills
 
 ### frontend-skill
