@@ -2,11 +2,13 @@
 
 技術ブログを 1 記事 1 トラックとして再生する音声プレーヤーの企画リポジトリです。
 
-現時点では実装はまだ含めず、まず要件整理ドキュメントだけを置いています。
+現時点では実装はまだ含めず、まず要件整理と関連メモを置いています。
 
 ## Documents
 
 - `docs/blog_audio_player.md`: MVP の要件・優先順位・画面イメージ・読み上げ方針
+- `docs/codex_best_practices.md`: Codex 開発運用のベストプラクティス調査メモ
+- `docs/codex_skills.md`: このプロジェクトで使う Codex skills の一覧と用途
 
 ## Status
 
