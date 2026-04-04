@@ -1,15 +1,17 @@
-import { mockArticles } from "../../data/mockArticles";
+import {
+  buildQueueItems,
+  getArticleById,
+} from "../../data/mockLibrary";
 import { usePlayback } from "../../app/playback/PlaybackContext";
+import { toQueueListItemViewModel } from "../../view-models/library";
 import styles from "./QueueScreen.module.css";
 
 export function QueueScreen() {
   const {
-    state: { currentArticleId, queueArticleIds },
+    state: { currentQueueItemId, queueItemIds },
   } = usePlayback();
 
-  const queuedArticles = queueArticleIds
-    .map((articleId) => mockArticles.find((article) => article.id === articleId))
-    .filter((article) => article !== undefined);
+  const queueItems = buildQueueItems(queueItemIds, currentQueueItemId);
 
   return (
     <section className={styles.screen}>
@@ -21,22 +23,30 @@ export function QueueScreen() {
       </div>
 
       <ol className={styles.queueList}>
-        {queuedArticles.map((article, index) => {
-          const isCurrent = article.id === currentArticleId;
+        {queueItems.map((queueItem) => {
+          const article = getArticleById(queueItem.articleId);
+
+          if (!article) {
+            return null;
+          }
+
+          const viewModel = toQueueListItemViewModel(article, queueItem);
 
           return (
-            <li key={article.id} className={styles.queueItem}>
-              <div className={styles.position}>{String(index + 1).padStart(2, "0")}</div>
+            <li key={viewModel.id} className={styles.queueItem}>
+              <div className={styles.position}>{viewModel.positionLabel}</div>
               <div className={styles.body}>
                 <div className={styles.headlineRow}>
-                  <h2 className={styles.title}>{article.title}</h2>
-                  <span className={isCurrent ? styles.badgeActive : styles.badge}>
-                    {isCurrent ? "Now" : "Queued"}
+                  <h2 className={styles.title}>{viewModel.title}</h2>
+                  <span
+                    className={
+                      queueItem.queueState === "current" ? styles.badgeActive : styles.badge
+                    }
+                  >
+                    {viewModel.badgeLabel}
                   </span>
                 </div>
-                <p className={styles.meta}>
-                  {article.sourceType} ・ {article.author} ・ {article.durationMinutes} min
-                </p>
+                <p className={styles.meta}>{viewModel.metaLine}</p>
               </div>
             </li>
           );

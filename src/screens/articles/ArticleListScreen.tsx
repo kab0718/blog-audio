@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
-import { mockArticles } from "../../data/mockArticles";
+import { getAudioTrackByArticleId, mockArticles } from "../../data/mockLibrary";
 import { usePlayback } from "../../app/playback/PlaybackContext";
+import { toArticleListItemViewModel } from "../../view-models/library";
 import styles from "./ArticleListScreen.module.css";
 
 export function ArticleListScreen() {
   const {
-    state: { currentArticleId, queueArticleIds },
+    state: { currentQueueItemId, queueItemIds },
   } = usePlayback();
 
   return (
@@ -24,34 +25,46 @@ export function ArticleListScreen() {
         </div>
         <div>
           <span className={styles.metricLabel}>Queued</span>
-          <strong className={styles.metricValue}>{queueArticleIds.length}</strong>
+          <strong className={styles.metricValue}>{queueItemIds.length}</strong>
         </div>
       </div>
 
       <ul className={styles.list}>
         {mockArticles.map((article, index) => {
-          const isCurrent = article.id === currentArticleId;
+          const viewModel = toArticleListItemViewModel(
+            article,
+            getAudioTrackByArticleId(article.id),
+            {
+              index,
+              isCurrent: article.id === currentQueueItemId,
+            },
+          );
 
           return (
-            <li key={article.id} className={styles.item}>
-              <div className={styles.trackIndex}>{String(index + 1).padStart(2, "0")}</div>
+            <li key={viewModel.id} className={styles.item}>
+              <div className={styles.trackIndex}>{viewModel.indexLabel}</div>
               <div className={styles.trackBody}>
                 <div className={styles.metaRow}>
-                  <span>{article.sourceType}</span>
-                  <span>{article.author}</span>
-                  <span>{article.durationMinutes} min</span>
+                  <span>{viewModel.sourceLabel}</span>
+                  <span>{viewModel.author}</span>
+                  <span>{viewModel.durationLabel}</span>
+                  <span
+                    className={`${styles.statusBadge} ${styles[`statusBadge${capitalizeStatus(viewModel.trackStatusTone)}`]}`}
+                  >
+                    {viewModel.trackStatusLabel}
+                  </span>
                 </div>
-                <h2 className={styles.title}>{article.title}</h2>
-                <p className={styles.summary}>{article.summary}</p>
+                <h2 className={styles.title}>{viewModel.title}</h2>
+                <p className={styles.summary}>{viewModel.summary}</p>
                 <div className={styles.footerRow}>
                   <div className={styles.tags}>
-                    {article.tags.map((tag) => (
+                    {viewModel.tags.map((tag) => (
                       <span key={tag} className={styles.tag}>
                         {tag}
                       </span>
                     ))}
                   </div>
-                  {isCurrent ? (
+                  {viewModel.isCurrent ? (
                     <Link className={styles.actionLink} to="/player">
                       再生画面へ
                     </Link>
@@ -68,4 +81,8 @@ export function ArticleListScreen() {
       </ul>
     </section>
   );
+}
+
+function capitalizeStatus(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -10,6 +10,7 @@
 - `docs/codex_best_practices.md`: Codex 開発運用のベストプラクティス調査メモ
 - `docs/codex_skills.md`: このプロジェクトで使う Codex skills の一覧と用途
 - `docs/tasks/01-app-shell.md`: issue #1 に対応するアプリ骨格タスクの実装計画
+- `docs/tasks/02-domain-model.md`: issue #2 に対応するドメインモデル定義タスクの実装計画
 
 ## Commands
 
@@ -21,5 +22,6 @@
 ## Status
 
 - モバイル向け Web アプリ骨格を追加済み
+- `Article` / `AudioTrack` / `QueueItem` と再生状態の MVP 契約を型定義とモックデータへ反映済み
 - 記事一覧 / プレーヤー / キューの 3 画面と共通レイアウトを仮データで確認可能
 - 実データ取得、音声再生ロジック、コードブロック要約は今後追加予定

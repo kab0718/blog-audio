@@ -1,11 +1,13 @@
-export type SourceType = "Zenn" | "Qiita";
+export type SourceType = "zenn" | "qiita";
 
 export type Article = {
   id: string;
+  sourceArticleId: string;
   title: string;
   sourceType: SourceType;
   author: string;
-  durationMinutes: number;
+  url: string;
+  estimatedDurationSeconds: number;
   tags: string[];
   summary: string;
 };

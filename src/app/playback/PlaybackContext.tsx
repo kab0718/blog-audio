@@ -6,19 +6,13 @@ import {
   useMemo,
   useReducer,
 } from "react";
-import { mockArticles } from "../../data/mockArticles";
-
-type PlaybackStatus = "idle" | "ready";
-
-type PlaybackState = {
-  currentArticleId: string | null;
-  queueArticleIds: string[];
-  status: PlaybackStatus;
-};
+import { initialQueueItemIds, mockArticles } from "../../data/mockLibrary";
+import type { PlaybackState, PlayerStatus } from "../../types/playback";
 
 type PlaybackAction =
-  | { type: "setCurrentArticle"; articleId: string }
-  | { type: "setQueue"; articleIds: string[] };
+  | { type: "setCurrentQueueItem"; queueItemId: string }
+  | { type: "setQueue"; queueItemIds: string[] }
+  | { type: "setPlayerStatus"; playerStatus: PlayerStatus };
 
 type PlaybackContextValue = {
   state: PlaybackState;
@@ -26,9 +20,9 @@ type PlaybackContextValue = {
 };
 
 const initialState: PlaybackState = {
-  currentArticleId: mockArticles[0]?.id ?? null,
-  queueArticleIds: mockArticles.map((article) => article.id),
-  status: "ready",
+  currentQueueItemId: mockArticles[0]?.id ?? null,
+  queueItemIds: initialQueueItemIds,
+  playerStatus: "paused",
 };
 
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
@@ -38,15 +32,20 @@ function playbackReducer(
   action: PlaybackAction,
 ): PlaybackState {
   switch (action.type) {
-    case "setCurrentArticle":
+    case "setCurrentQueueItem":
       return {
         ...state,
-        currentArticleId: action.articleId,
+        currentQueueItemId: action.queueItemId,
       };
     case "setQueue":
       return {
         ...state,
-        queueArticleIds: action.articleIds,
+        queueItemIds: action.queueItemIds,
+      };
+    case "setPlayerStatus":
+      return {
+        ...state,
+        playerStatus: action.playerStatus,
       };
     default:
       return state;

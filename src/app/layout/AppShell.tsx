@@ -1,4 +1,11 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { usePlayback } from "../playback/PlaybackContext";
+import {
+  getArticleById,
+  getAudioTrackByArticleId,
+  mockArticles,
+} from "../../data/mockLibrary";
+import { toMiniPlayerViewModel } from "../../view-models/library";
 import styles from "./AppShell.module.css";
 
 const navItems = [
@@ -24,7 +31,24 @@ const routeLabels: Record<string, { eyebrow: string; title: string }> = {
 
 export function AppShell() {
   const location = useLocation();
+  const {
+    state: { currentQueueItemId, playerStatus },
+  } = usePlayback();
   const currentRoute = routeLabels[location.pathname] ?? routeLabels["/"];
+
+  const fallbackArticle = mockArticles[0];
+
+  if (!fallbackArticle) {
+    return null;
+  }
+
+  const currentArticle = getArticleById(currentQueueItemId) ?? fallbackArticle;
+  const currentTrack = getAudioTrackByArticleId(currentArticle.id);
+  const miniPlayer = toMiniPlayerViewModel(
+    currentArticle,
+    currentTrack,
+    playerStatus,
+  );
 
   return (
     <div className={styles.viewport}>
@@ -48,10 +72,9 @@ export function AppShell() {
 
       <div className={styles.footerStack}>
         <section className={styles.miniPlayerSlot} aria-label="mini player slot">
-          <div className={styles.slotLabel}>Mini player slot</div>
-          <p className={styles.slotCopy}>
-            再生状態表示は後続タスクで実装する。
-          </p>
+          <div className={styles.slotLabel}>Mini player</div>
+          <p className={styles.slotTitle}>{miniPlayer.title}</p>
+          <p className={styles.slotCopy}>{miniPlayer.statusLine}</p>
         </section>
 
         <nav className={styles.navigation} aria-label="primary">
