@@ -14,6 +14,15 @@ custom skill 本体は `~/.codex/skills` 配下に置き、プロジェクト側
   - ざっくりした依頼を実装可能な粒度まで詰めたいとき
   - 実装前に scope / acceptance criteria / implementation plan を整理したいとき
 
+### blog-audio-issue-implementation-planner
+
+- path: `~/.codex/skills/blog-audio-issue-implementation-planner`
+- 役割: `blog-audio` 向け issue の文面を読み、`docs/tasks/<slug>.md` に実装可能な計画として正規化する
+- 使いどころ:
+  - `blog-audio-task-planner` などで整理済みの issue から実装計画を起こしたいとき
+  - issue URL / issue 本文を元に `docs/tasks/` の実装計画ドキュメントへ落としたいとき
+  - 実装前に issue の曖昧さを assumptions / open questions として明示したいとき
+
 ### blog-audio-git-publish
 
 - path: `~/.codex/skills/blog-audio-git-publish`
