@@ -1,0 +1,98 @@
+.screen {
+  display: grid;
+  gap: 18px;
+}
+
+.intro {
+  display: grid;
+  gap: 8px;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--color-accent-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.copy {
+  max-width: 30ch;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.queueList {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queueItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 22px;
+  background: rgb(10 18 28 / 0.72);
+}
+
+.position {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.headlineRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.meta {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.88rem;
+}
+
+.badge,
+.badgeActive {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge {
+  color: var(--color-text-muted);
+  background: rgb(255 255 255 / 0.05);
+}
+
+.badgeActive {
+  color: #08101b;
+  background: linear-gradient(180deg, #8cb2ff 0%, #5f83d1 100%);
+}

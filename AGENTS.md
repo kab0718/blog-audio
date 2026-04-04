@@ -21,11 +21,13 @@ When requirements conflict, prefer `docs/blog_audio_player.md` for product decis
 
 ## Current Repository Status
 
-- This repo currently contains planning documents only.
-- Application code has not been added yet.
-- There are no established build, test, lint, or format commands yet.
-
-Do not invent project commands. If implementation adds tooling, update this file with the exact commands.
+- This repo now includes a `Vite + React + TypeScript` application shell for mobile-first UI work.
+- The current implementation includes article list, player, and queue screens wired with mock data and shared layout/state placeholders.
+- Established project commands are:
+  - `npm install`
+  - `npm run dev`
+  - `npm run build`
+  - `npm run preview`
 
 ## Product Priorities
 
@@ -112,11 +114,11 @@ A task is only complete when all of the following are true:
 
 ## Validation Policy
 
-Because the repo does not yet define project tooling:
+Run only commands that actually exist in the repo.
 
-- run only commands that actually exist in the repo
-- do not claim tests, lint, or builds were run if no such commands exist
-- if you add tooling, document the exact validation commands here in a follow-up change
+- Primary validation command: `npm run build`
+- Use `npm run dev` for manual UI checks during implementation
+- Do not claim tests or lint were run unless those commands are added to the repo
 
 ## Preferred Task Breakdown
 

@@ -1,0 +1,11 @@
+:root {
+  font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  color-scheme: dark;
+  background-color: #050a12;
+  color: #f5f7fb;
+
+  --color-text-primary: #f5f7fb;
+  --color-text-secondary: #a7b4ca;
+  --color-text-muted: #71819a;
+  --color-accent-soft: #8cb2ff;
+}
