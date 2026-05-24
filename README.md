@@ -11,6 +11,7 @@
 - `docs/codex_skills.md`: このプロジェクトで使う Codex skills の一覧と用途
 - `docs/tasks/01-app-shell.md`: issue #1 に対応するアプリ骨格タスクの実装計画
 - `docs/tasks/02-domain-model.md`: issue #2 に対応するドメインモデル定義タスクの実装計画
+- `docs/tasks/04-qiita-article-list.md`: issue #4 に対応する Qiita 記事一覧取り込みタスクの実装計画
 
 ## Commands
 
@@ -23,5 +24,6 @@
 
 - モバイル向け Web アプリ骨格を追加済み
 - `Article` / `AudioTrack` / `QueueItem` と再生状態の MVP 契約を型定義とモックデータへ反映済み
-- 記事一覧 / プレーヤー / キューの 3 画面と共通レイアウトを仮データで確認可能
-- 実データ取得、音声再生ロジック、コードブロック要約は今後追加予定
+- 記事一覧 / プレーヤー / キューの 3 画面と共通レイアウトを確認可能
+- Zenn / Qiita の記事一覧を取得し、共通 `Article` 形式へ正規化する provider を追加済み
+- 音声再生ロジック、記事本文抽出、コードブロック要約は今後追加予定

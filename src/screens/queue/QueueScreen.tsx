@@ -64,11 +64,11 @@ export function QueueScreen() {
 function getEmptyQueueCopy(status: string) {
   switch (status) {
     case "loading":
-      return "Zenn の記事一覧を読み込んでいます。取得後にキューへ同期されます。";
+      return "記事一覧を読み込んでいます。取得後にキューへ同期されます。";
     case "error":
       return "記事一覧を取得できないため、キューを作成できません。";
     case "empty":
-      return "Zenn から取得した記事一覧が空でした。";
+      return "取得した記事一覧が空でした。";
     default:
       return "記事一覧から再生する記事を選択してください。";
   }

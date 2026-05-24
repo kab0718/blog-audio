@@ -10,6 +10,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/zenn/, "/api"),
       },
+      "/api/qiita": {
+        target: "https://qiita.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/qiita/, "/api/v2"),
+      },
     },
   },
 });

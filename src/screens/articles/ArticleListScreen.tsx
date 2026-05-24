@@ -34,7 +34,7 @@ export function ArticleListScreen() {
 
       {status === "loading" ? (
         <div className={styles.stateCard}>
-          <p className={styles.stateTitle}>Zenn の最新記事を取得中</p>
+          <p className={styles.stateTitle}>記事一覧を取得中</p>
           <p className={styles.stateCopy}>
             記事メタ情報を読み込み、共通 Article 形式へ正規化しています。
           </p>
@@ -45,7 +45,7 @@ export function ArticleListScreen() {
         <div className={styles.stateCard}>
           <p className={styles.stateTitle}>記事一覧を取得できませんでした</p>
           <p className={styles.stateCopy}>
-            {errorMessage ?? "Zenn の記事一覧に一時的にアクセスできません。"}
+            {errorMessage ?? "記事 source に一時的にアクセスできません。"}
           </p>
           <button type="button" className={styles.retryButton} onClick={retry}>
             再試行
@@ -57,7 +57,7 @@ export function ArticleListScreen() {
         <div className={styles.stateCard}>
           <p className={styles.stateTitle}>表示できる記事がありません</p>
           <p className={styles.stateCopy}>
-            Zenn から取得した一覧が空でした。時間を置いて再試行できます。
+            取得した記事一覧が空でした。時間を置いて再試行できます。
           </p>
           <button type="button" className={styles.retryButton} onClick={retry}>
             再試行

@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { fetchQiitaArticles } from "../../sources/qiita/articles";
 import { fetchZennLatestArticles } from "../../sources/zenn/articles";
 import type { Article } from "../../types/article";
 
@@ -45,7 +46,7 @@ export function ArticleLibraryProvider({ children }: { children: ReactNode }) {
       errorMessage: null,
     }));
 
-    fetchZennLatestArticles()
+    fetchArticleLibraryArticles()
       .then((articles) => {
         if (!isActive) {
           return;
@@ -68,7 +69,7 @@ export function ArticleLibraryProvider({ children }: { children: ReactNode }) {
           errorMessage:
             error instanceof Error
               ? error.message
-              : "Zenn articles could not be loaded",
+              : "Article sources could not be loaded",
         });
       });
 
@@ -118,4 +119,13 @@ export function useArticleLibrary() {
   }
 
   return context;
+}
+
+async function fetchArticleLibraryArticles() {
+  const [zennArticles, qiitaArticles] = await Promise.all([
+    fetchZennLatestArticles(),
+    fetchQiitaArticles(),
+  ]);
+
+  return [...zennArticles, ...qiitaArticles];
 }

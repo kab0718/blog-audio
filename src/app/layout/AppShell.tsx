@@ -91,7 +91,7 @@ function getEmptyMiniPlayer(status: string) {
     case "loading":
       return {
         title: "記事を読み込み中",
-        statusLine: "Zenn latest articles",
+        statusLine: "Article sources",
       };
     case "error":
       return {

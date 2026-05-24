@@ -21,7 +21,7 @@ export function PlayerScreen() {
           <p className={styles.meta}>{getEmptyPlayerCopy(status)}</p>
         </div>
         <div className={styles.emptyState}>
-          Zenn 記事一覧の取得後、記事を選ぶとここに再生対象が表示されます。
+          記事一覧の取得後、記事を選ぶとここに再生対象が表示されます。
         </div>
       </section>
     );
@@ -83,7 +83,7 @@ export function PlayerScreen() {
 function getEmptyPlayerCopy(status: string) {
   switch (status) {
     case "loading":
-      return "Zenn の記事一覧を読み込んでいます。";
+      return "記事一覧を読み込んでいます。";
     case "error":
       return "記事一覧を取得できないため、再生対象を選べません。";
     case "empty":
