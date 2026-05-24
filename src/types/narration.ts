@@ -75,6 +75,7 @@ export type NarrationSegmentOrigin =
 
 type NarrationSegmentBase = {
   id: string;
+  articleId: string;
   order: number;
   sourceSegmentId: ArticleContentSegment["id"];
   text: string;
@@ -93,3 +94,44 @@ export type CodeNarrationSegment = NarrationSegmentBase & {
 };
 
 export type NarrationSegment = ProseNarrationSegment | CodeNarrationSegment;
+
+export type NarrationTextChunk = {
+  id: string;
+  order: number;
+  text: string;
+  sourceSegmentIds: ArticleContentSegment["id"][];
+};
+
+export type NarrationScriptVersion = "narration-rules-v1";
+
+export type NarrationScript = {
+  articleId: string;
+  text: string;
+  segments: NarrationSegment[];
+  textChunks: NarrationTextChunk[];
+  estimatedDurationSeconds: number;
+  generatedAt: string;
+  version: NarrationScriptVersion;
+};
+
+export type NarrationGenerationFailureReason =
+  | "article-content-failed"
+  | "empty-content"
+  | "empty-narration";
+
+export type NarrationGenerationSuccess = {
+  status: "success";
+  script: NarrationScript;
+};
+
+export type NarrationGenerationFailure = {
+  status: "failed";
+  articleId: string;
+  reason: NarrationGenerationFailureReason;
+  errorMessage: string;
+  generatedAt: string;
+};
+
+export type NarrationGenerationResult =
+  | NarrationGenerationSuccess
+  | NarrationGenerationFailure;
