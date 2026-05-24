@@ -1,7 +1,9 @@
 import type { Article } from "../../types/article";
+import type { RawArticleContentInput } from "../../types/articleContent";
 
 const ZENN_BASE_URL = "https://zenn.dev";
 const ZENN_LATEST_ARTICLES_URL = "/api/zenn/articles?order=latest";
+const ZENN_ARTICLE_CONTENT_URL = "/api/zenn/articles";
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
 
@@ -39,6 +41,39 @@ export async function fetchZennLatestArticles(): Promise<Article[]> {
   return payload.articles
     .map((article) => toArticleFromZenn(article))
     .filter((article): article is Article => article !== null);
+}
+
+export async function fetchZennArticleContent(
+  article: Article,
+): Promise<RawArticleContentInput> {
+  if (article.sourceType !== "zenn") {
+    throw new Error("Zenn content fetcher received a non-Zenn article");
+  }
+
+  const response = await fetch(
+    `${ZENN_ARTICLE_CONTENT_URL}/${encodeURIComponent(
+      article.sourceArticleId,
+    )}/blob.md`,
+    {
+      headers: {
+        Accept: "text/markdown, text/plain",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Zenn article content request failed: ${response.status}`);
+  }
+
+  return {
+    articleId: article.id,
+    sourceType: article.sourceType,
+    sourceArticleId: article.sourceArticleId,
+    url: article.url,
+    format: "markdown",
+    body: await response.text(),
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 export function toArticleFromZenn(rawArticle: unknown): Article | null {

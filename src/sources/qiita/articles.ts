@@ -1,6 +1,8 @@
 import type { Article } from "../../types/article";
+import type { RawArticleContentInput } from "../../types/articleContent";
 
 const QIITA_ITEMS_URL = "/api/qiita/items?page=1&per_page=8";
+const QIITA_ITEM_URL = "/api/qiita/items";
 const QIITA_BASE_URL = "https://qiita.com";
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
@@ -11,6 +13,7 @@ export type QiitaItemResponse = {
   title?: unknown;
   url?: unknown;
   body?: unknown;
+  rendered_body?: unknown;
   user?: {
     id?: unknown;
     name?: unknown;
@@ -38,6 +41,50 @@ export async function fetchQiitaArticles(): Promise<Article[]> {
   return payload
     .map((item) => toArticleFromQiita(item))
     .filter((article): article is Article => article !== null);
+}
+
+export async function fetchQiitaArticleContent(
+  article: Article,
+): Promise<RawArticleContentInput> {
+  if (article.sourceType !== "qiita") {
+    throw new Error("Qiita content fetcher received a non-Qiita article");
+  }
+
+  const response = await fetch(
+    `${QIITA_ITEM_URL}/${encodeURIComponent(article.sourceArticleId)}`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Qiita article content request failed: ${response.status}`);
+  }
+
+  const payload: unknown = await response.json();
+
+  if (!isRecord(payload)) {
+    throw new Error("Qiita article content response shape is not supported");
+  }
+
+  const markdownBody = toNonEmptyString(payload.body);
+  const renderedBody = toNonEmptyString(payload.rendered_body);
+
+  if (!markdownBody && !renderedBody) {
+    throw new Error("Qiita article content response did not include a body");
+  }
+
+  return {
+    articleId: article.id,
+    sourceType: article.sourceType,
+    sourceArticleId: article.sourceArticleId,
+    url: article.url,
+    format: markdownBody ? "markdown" : "html",
+    body: markdownBody ?? renderedBody ?? "",
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 export function toArticleFromQiita(rawItem: unknown): Article | null {
