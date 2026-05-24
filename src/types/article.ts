@@ -9,5 +9,5 @@ export type Article = {
   url: string;
   estimatedDurationSeconds: number;
   tags: string[];
-  summary: string;
+  summary?: string;
 };

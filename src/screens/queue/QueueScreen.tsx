@@ -1,12 +1,11 @@
-import {
-  buildQueueItems,
-  getArticleById,
-} from "../../data/mockLibrary";
+import { useArticleLibrary } from "../../app/articles/ArticleLibraryContext";
 import { usePlayback } from "../../app/playback/PlaybackContext";
+import { buildQueueItems } from "../../data/mockLibrary";
 import { toQueueListItemViewModel } from "../../view-models/library";
 import styles from "./QueueScreen.module.css";
 
 export function QueueScreen() {
+  const { getArticleById, status } = useArticleLibrary();
   const {
     state: { currentQueueItemId, queueItemIds },
   } = usePlayback();
@@ -21,6 +20,10 @@ export function QueueScreen() {
           連続再生を支える並びだけ先に見せ、操作ロジックは後続タスクへ分離する。
         </p>
       </div>
+
+      {queueItems.length === 0 ? (
+        <div className={styles.emptyState}>{getEmptyQueueCopy(status)}</div>
+      ) : null}
 
       <ol className={styles.queueList}>
         {queueItems.map((queueItem) => {
@@ -40,7 +43,9 @@ export function QueueScreen() {
                   <h2 className={styles.title}>{viewModel.title}</h2>
                   <span
                     className={
-                      queueItem.queueState === "current" ? styles.badgeActive : styles.badge
+                      queueItem.queueState === "current"
+                        ? styles.badgeActive
+                        : styles.badge
                     }
                   >
                     {viewModel.badgeLabel}
@@ -54,4 +59,17 @@ export function QueueScreen() {
       </ol>
     </section>
   );
+}
+
+function getEmptyQueueCopy(status: string) {
+  switch (status) {
+    case "loading":
+      return "Zenn の記事一覧を読み込んでいます。取得後にキューへ同期されます。";
+    case "error":
+      return "記事一覧を取得できないため、キューを作成できません。";
+    case "empty":
+      return "Zenn から取得した記事一覧が空でした。";
+    default:
+      return "記事一覧から再生する記事を選択してください。";
+  }
 }

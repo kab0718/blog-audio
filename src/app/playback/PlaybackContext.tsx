@@ -6,12 +6,12 @@ import {
   useMemo,
   useReducer,
 } from "react";
-import { initialQueueItemIds, mockArticles } from "../../data/mockLibrary";
 import type { PlaybackState, PlayerStatus } from "../../types/playback";
 
 type PlaybackAction =
   | { type: "setCurrentQueueItem"; queueItemId: string }
   | { type: "setQueue"; queueItemIds: string[] }
+  | { type: "syncQueueWithArticles"; articleIds: string[] }
   | { type: "setPlayerStatus"; playerStatus: PlayerStatus };
 
 type PlaybackContextValue = {
@@ -20,9 +20,9 @@ type PlaybackContextValue = {
 };
 
 const initialState: PlaybackState = {
-  currentQueueItemId: mockArticles[0]?.id ?? null,
-  queueItemIds: initialQueueItemIds,
-  playerStatus: "paused",
+  currentQueueItemId: null,
+  queueItemIds: [],
+  playerStatus: "idle",
 };
 
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
@@ -42,6 +42,26 @@ function playbackReducer(
         ...state,
         queueItemIds: action.queueItemIds,
       };
+    case "syncQueueWithArticles": {
+      const currentQueueItemId =
+        state.currentQueueItemId &&
+        action.articleIds.includes(state.currentQueueItemId)
+          ? state.currentQueueItemId
+          : action.articleIds[0] ?? null;
+
+      if (
+        state.currentQueueItemId === currentQueueItemId &&
+        areStringArraysEqual(state.queueItemIds, action.articleIds)
+      ) {
+        return state;
+      }
+
+      return {
+        ...state,
+        currentQueueItemId,
+        queueItemIds: action.articleIds,
+      };
+    }
     case "setPlayerStatus":
       return {
         ...state,
@@ -71,4 +91,11 @@ export function usePlayback() {
   }
 
   return context;
+}
+
+function areStringArraysEqual(first: string[], second: string[]) {
+  return (
+    first.length === second.length &&
+    first.every((value, index) => value === second[index])
+  );
 }

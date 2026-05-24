@@ -161,3 +161,38 @@
   font-weight: 600;
   text-decoration: none;
 }
+
+.stateCard {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 22px;
+  background: rgb(10 18 28 / 0.72);
+}
+
+.stateTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.stateCopy {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.retryButton {
+  justify-self: start;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #8cb2ff 0%, #5f83d1 100%);
+  color: #08101b;
+  font: inherit;
+  font-weight: 700;
+}

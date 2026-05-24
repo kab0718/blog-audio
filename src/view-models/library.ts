@@ -7,7 +7,7 @@ export type ArticleListItemViewModel = {
   id: string;
   indexLabel: string;
   title: string;
-  summary: string;
+  summary?: string;
   sourceLabel: string;
   author: string;
   durationLabel: string;

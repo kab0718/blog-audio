@@ -96,3 +96,13 @@
   color: #08101b;
   background: linear-gradient(180deg, #8cb2ff 0%, #5f83d1 100%);
 }
+
+.emptyState {
+  padding: 18px;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 22px;
+  background: rgb(10 18 28 / 0.72);
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}

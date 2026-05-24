@@ -1,10 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useArticleLibrary } from "../articles/ArticleLibraryContext";
 import { usePlayback } from "../playback/PlaybackContext";
-import {
-  getArticleById,
-  getAudioTrackByArticleId,
-  mockArticles,
-} from "../../data/mockLibrary";
+import { getAudioTrackByArticleId } from "../../data/mockLibrary";
 import { toMiniPlayerViewModel } from "../../view-models/library";
 import styles from "./AppShell.module.css";
 
@@ -31,24 +28,16 @@ const routeLabels: Record<string, { eyebrow: string; title: string }> = {
 
 export function AppShell() {
   const location = useLocation();
+  const { getArticleById, status } = useArticleLibrary();
   const {
     state: { currentQueueItemId, playerStatus },
   } = usePlayback();
   const currentRoute = routeLabels[location.pathname] ?? routeLabels["/"];
-
-  const fallbackArticle = mockArticles[0];
-
-  if (!fallbackArticle) {
-    return null;
-  }
-
-  const currentArticle = getArticleById(currentQueueItemId) ?? fallbackArticle;
-  const currentTrack = getAudioTrackByArticleId(currentArticle.id);
-  const miniPlayer = toMiniPlayerViewModel(
-    currentArticle,
-    currentTrack,
-    playerStatus,
-  );
+  const currentArticle = getArticleById(currentQueueItemId);
+  const currentTrack = getAudioTrackByArticleId(currentArticle?.id ?? null);
+  const miniPlayer = currentArticle
+    ? toMiniPlayerViewModel(currentArticle, currentTrack, playerStatus)
+    : getEmptyMiniPlayer(status);
 
   return (
     <div className={styles.viewport}>
@@ -95,4 +84,29 @@ export function AppShell() {
       </div>
     </div>
   );
+}
+
+function getEmptyMiniPlayer(status: string) {
+  switch (status) {
+    case "loading":
+      return {
+        title: "記事を読み込み中",
+        statusLine: "Zenn latest articles",
+      };
+    case "error":
+      return {
+        title: "記事を取得できません",
+        statusLine: "Articles unavailable",
+      };
+    case "empty":
+      return {
+        title: "記事がありません",
+        statusLine: "Queue is empty",
+      };
+    default:
+      return {
+        title: "再生対象なし",
+        statusLine: "Queue is empty",
+      };
+  }
 }
