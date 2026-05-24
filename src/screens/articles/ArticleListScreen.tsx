@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useArticleLibrary } from "../../app/articles/ArticleLibraryContext";
 import { usePlayback } from "../../app/playback/PlaybackContext";
-import { getAudioTrackByArticleId } from "../../data/mockLibrary";
+import { useAudioTracks } from "../../app/tracks/AudioTrackContext";
 import { toArticleListItemViewModel } from "../../view-models/library";
 import styles from "./ArticleListScreen.module.css";
 
@@ -11,6 +11,7 @@ export function ArticleListScreen() {
     state: { currentQueueItemId, queueItemIds },
     dispatch,
   } = usePlayback();
+  const { getTrackByArticleId } = useAudioTracks();
 
   return (
     <section className={styles.screen}>
@@ -70,7 +71,7 @@ export function ArticleListScreen() {
           {articles.map((article, index) => {
             const viewModel = toArticleListItemViewModel(
               article,
-              getAudioTrackByArticleId(article.id),
+              getTrackByArticleId(article.id),
               {
                 index,
                 isCurrent: article.id === currentQueueItemId,

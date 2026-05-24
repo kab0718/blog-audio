@@ -52,6 +52,8 @@ export const mockAudioTracks: AudioTrack[] = [
     },
     durationSeconds: 8 * 60,
     generatedAt: "2026-04-04T07:30:00.000Z",
+    source: "local-preview",
+    narrationVersion: "narration-rules-v1",
   },
   {
     id: "track:qiita:react-state-audio",
@@ -60,6 +62,8 @@ export const mockAudioTracks: AudioTrack[] = [
     playbackResource: null,
     durationSeconds: null,
     generatedAt: null,
+    source: "local-preview",
+    narrationVersion: null,
   },
   {
     id: "track:zenn:typescript-parser-notes",
@@ -68,6 +72,9 @@ export const mockAudioTracks: AudioTrack[] = [
     playbackResource: null,
     durationSeconds: null,
     generatedAt: null,
+    source: "local-preview",
+    narrationVersion: null,
+    errorMessage: "Mock audio generation failed",
   },
 ];
 

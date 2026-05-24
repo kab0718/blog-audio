@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useArticleLibrary } from "../articles/ArticleLibraryContext";
 import { usePlayback } from "../playback/PlaybackContext";
-import { getAudioTrackByArticleId } from "../../data/mockLibrary";
+import { useAudioTracks } from "../tracks/AudioTrackContext";
 import { toMiniPlayerViewModel } from "../../view-models/library";
 import styles from "./AppShell.module.css";
 
@@ -32,9 +32,10 @@ export function AppShell() {
   const {
     state: { currentQueueItemId, playerStatus },
   } = usePlayback();
+  const { getTrackByArticleId } = useAudioTracks();
   const currentRoute = routeLabels[location.pathname] ?? routeLabels["/"];
   const currentArticle = getArticleById(currentQueueItemId);
-  const currentTrack = getAudioTrackByArticleId(currentArticle?.id ?? null);
+  const currentTrack = getTrackByArticleId(currentArticle?.id ?? null);
   const miniPlayer = currentArticle
     ? toMiniPlayerViewModel(currentArticle, currentTrack, playerStatus)
     : getEmptyMiniPlayer(status);

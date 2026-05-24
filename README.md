@@ -32,4 +32,6 @@
 - 記事一覧 / プレーヤー / キューの 3 画面と共通レイアウトを確認可能
 - Zenn / Qiita の記事一覧を取得し、共通 `Article` 形式へ正規化する provider を追加済み
 - 記事本文を取得し、見出し・段落・引用・リスト・コードブロックを共通 `ArticleContent` 形式へ抽出する provider / service を追加済み
-- 音声再生ロジック、コードブロック要約、TTS 台本生成は今後追加予定
+- コードブロックを逐語読みしない変換と、TTS 向けナレーション台本生成を追加済み
+- 生成中 / ready / failed を扱う `AudioTrack` 生成 service と in-memory cache を追加済み
+- 実 TTS provider / backend 接続、永続キャッシュ、詳細な連続再生制御は今後追加予定

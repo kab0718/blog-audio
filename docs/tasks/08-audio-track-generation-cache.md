@@ -152,3 +152,4 @@
   - このタスクでは TTS-ready text 生成やコードブロック要約自体は扱わない
   - cache の永続化、期限管理、容量管理は MVP の最小範囲に留める
   - 実 TTS provider と backend 境界は、API key 保護と CORS を確認したうえで実装時に確定する
+  - 初期実装では provider 境界を保つため、実 TTS ではなく local preview adapter が短い再生可能 WAV リソースを返す

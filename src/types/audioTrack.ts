@@ -5,6 +5,8 @@ export type PlaybackResource = {
   url: string;
 };
 
+export type AudioTrackSource = "local-preview";
+
 export type AudioTrack = {
   id: string;
   articleId: string;
@@ -12,4 +14,7 @@ export type AudioTrack = {
   playbackResource: PlaybackResource | null;
   durationSeconds: number | null;
   generatedAt: string | null;
+  source: AudioTrackSource;
+  narrationVersion: string | null;
+  errorMessage?: string;
 };

@@ -22,6 +22,7 @@ export type NowPlayingViewModel = {
   metaLine: string;
   audioTrackLabel: string;
   audioTrackCopy: string;
+  playbackResourceCopy: string;
   playerStatusLabel: string;
   primaryActionLabel: string;
 };
@@ -53,7 +54,7 @@ export function toArticleListItemViewModel(
     author: article.author,
     durationLabel: formatDurationLabel(article.estimatedDurationSeconds),
     tags: article.tags,
-    trackStatusLabel: getAudioTrackLabel(track?.status ?? "generating"),
+    trackStatusLabel: track ? getAudioTrackLabel(track.status) : "Pending",
     trackStatusTone: track?.status ?? "generating",
     isCurrent: options.isCurrent,
   };
@@ -72,9 +73,10 @@ export function toNowPlayingViewModel(
       formatDurationLabel(article.estimatedDurationSeconds),
     ].join(" ・ "),
     audioTrackLabel: getAudioTrackLabel(track?.status ?? "generating"),
-    audioTrackCopy: getAudioTrackCopy(track?.status ?? "generating"),
+    audioTrackCopy: getAudioTrackCopy(track),
+    playbackResourceCopy: getPlaybackResourceCopy(track),
     playerStatusLabel: getPlayerStatusLabel(playerStatus),
-    primaryActionLabel: playerStatus === "playing" ? "Pause" : "Play",
+    primaryActionLabel: getPrimaryActionLabel(track, playerStatus),
   };
 }
 
@@ -130,16 +132,39 @@ export function getAudioTrackLabel(status: AudioTrackStatus) {
   }
 }
 
-function getAudioTrackCopy(status: AudioTrackStatus) {
-  switch (status) {
+function getAudioTrackCopy(track: AudioTrack | undefined) {
+  switch (track?.status ?? "generating") {
     case "ready":
-      return "音声トラックは再生可能な状態です。";
+      return "生成済みトラックを再利用できます。";
     case "failed":
-      return "音声生成に失敗しており、再試行導線が必要です。";
+      return track?.errorMessage ?? "音声生成に失敗しました。";
     case "generating":
     default:
-      return "音声を生成中で、完了前でも記事メタ情報は表示できます。";
+      return "音声トラックを生成中です。";
   }
+}
+
+function getPlaybackResourceCopy(track: AudioTrack | undefined) {
+  if (track?.status !== "ready" || !track.playbackResource) {
+    return "再生リソースは準備中です。";
+  }
+
+  return `PlaybackResource.kind = ${track.playbackResource.kind}`;
+}
+
+function getPrimaryActionLabel(
+  track: AudioTrack | undefined,
+  playerStatus: PlayerStatus,
+) {
+  if (track?.status === "failed") {
+    return "Retry";
+  }
+
+  if (track?.status !== "ready") {
+    return "Preparing";
+  }
+
+  return playerStatus === "playing" ? "Pause" : "Play";
 }
 
 function getPlayerStatusLabel(status: PlayerStatus) {
