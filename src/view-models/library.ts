@@ -15,6 +15,8 @@ export type ArticleListItemViewModel = {
   trackStatusLabel: string;
   trackStatusTone: AudioTrackStatus;
   isCurrent: boolean;
+  isQueued: boolean;
+  queueStatusLabel: string;
 };
 
 export type NowPlayingViewModel = {
@@ -43,7 +45,7 @@ export type MiniPlayerViewModel = {
 export function toArticleListItemViewModel(
   article: Article,
   track: AudioTrack | undefined,
-  options: { index: number; isCurrent: boolean },
+  options: { index: number; isCurrent: boolean; isQueued: boolean },
 ): ArticleListItemViewModel {
   return {
     id: article.id,
@@ -57,6 +59,8 @@ export function toArticleListItemViewModel(
     trackStatusLabel: track ? getAudioTrackLabel(track.status) : "Pending",
     trackStatusTone: track?.status ?? "generating",
     isCurrent: options.isCurrent,
+    isQueued: options.isQueued,
+    queueStatusLabel: getQueueStatusLabel(options.isCurrent, options.isQueued),
   };
 }
 
@@ -177,4 +181,12 @@ function getPlayerStatusLabel(status: PlayerStatus) {
     default:
       return "Idle";
   }
+}
+
+function getQueueStatusLabel(isCurrent: boolean, isQueued: boolean) {
+  if (isCurrent) {
+    return "Now playing";
+  }
+
+  return isQueued ? "Queued" : "Not queued";
 }

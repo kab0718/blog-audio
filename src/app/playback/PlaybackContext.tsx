@@ -15,6 +15,14 @@ type PlaybackAction =
       queueItemId: string;
       playerStatus?: PlayerStatus;
     }
+  | {
+      type: "playArticleNow";
+      articleId: string;
+      playerStatus?: PlayerStatus;
+    }
+  | { type: "addArticleToQueue"; articleId: string }
+  | { type: "removeQueueItem"; queueItemId: string }
+  | { type: "moveQueueItem"; queueItemId: string; direction: "up" | "down" }
   | { type: "setQueue"; queueItemIds: string[] }
   | { type: "syncQueueWithArticles"; articleIds: string[] }
   | { type: "setPlayerStatus"; playerStatus: PlayerStatus }
@@ -31,6 +39,13 @@ type PlaybackContextValue = {
   play: () => void;
   pause: () => void;
   seek: (positionSeconds: number) => void;
+  playArticleNow: (
+    articleId: string,
+    options?: { playerStatus?: PlayerStatus },
+  ) => void;
+  addArticleToQueue: (articleId: string) => void;
+  removeQueueItem: (queueItemId: string) => void;
+  moveQueueItem: (queueItemId: string, direction: "up" | "down") => void;
   selectQueueItem: (
     queueItemId: string,
     options?: { playerStatus?: PlayerStatus },
@@ -63,8 +78,47 @@ function playbackReducer(
       return {
         ...state,
         currentQueueItemId: action.queueItemId,
+        queueItemIds: appendUnique(state.queueItemIds, action.queueItemId),
         playerStatus: action.playerStatus ?? "idle",
         ...createResetTrackProgressState(),
+      };
+    case "playArticleNow":
+      return {
+        ...state,
+        currentQueueItemId: action.articleId,
+        queueItemIds: appendUnique(state.queueItemIds, action.articleId),
+        playerStatus: action.playerStatus ?? "idle",
+        ...createResetTrackProgressState(),
+      };
+    case "addArticleToQueue":
+      if (state.queueItemIds.includes(action.articleId)) {
+        return state;
+      }
+
+      return {
+        ...state,
+        queueItemIds: [...state.queueItemIds, action.articleId],
+      };
+    case "removeQueueItem":
+      if (action.queueItemId === state.currentQueueItemId) {
+        return state;
+      }
+
+      return {
+        ...state,
+        queueItemIds: state.queueItemIds.filter(
+          (queueItemId) => queueItemId !== action.queueItemId,
+        ),
+      };
+    case "moveQueueItem":
+      return {
+        ...state,
+        queueItemIds: moveQueueItem(
+          state.queueItemIds,
+          action.queueItemId,
+          action.direction,
+          state.currentQueueItemId,
+        ),
       };
     case "setQueue":
       return {
@@ -132,7 +186,9 @@ function playbackReducer(
         ? state.queueItemIds.indexOf(state.currentQueueItemId)
         : -1;
       const nextQueueItemId =
-        currentIndex >= 0 ? state.queueItemIds[currentIndex + 1] : null;
+        currentIndex >= 0
+          ? state.queueItemIds[currentIndex + 1]
+          : state.queueItemIds[0] ?? null;
 
       if (!nextQueueItemId) {
         return {
@@ -167,6 +223,29 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const seek = useCallback(
     (positionSeconds: number) =>
       dispatch({ type: "setPlaybackPosition", positionSeconds }),
+    [],
+  );
+  const playArticleNow = useCallback(
+    (articleId: string, options?: { playerStatus?: PlayerStatus }) =>
+      dispatch({
+        type: "playArticleNow",
+        articleId,
+        playerStatus: options?.playerStatus,
+      }),
+    [],
+  );
+  const addArticleToQueue = useCallback(
+    (articleId: string) => dispatch({ type: "addArticleToQueue", articleId }),
+    [],
+  );
+  const removeQueueItem = useCallback(
+    (queueItemId: string) =>
+      dispatch({ type: "removeQueueItem", queueItemId }),
+    [],
+  );
+  const moveQueueItemCallback = useCallback(
+    (queueItemId: string, direction: "up" | "down") =>
+      dispatch({ type: "moveQueueItem", queueItemId, direction }),
     [],
   );
   const selectQueueItem = useCallback(
@@ -210,6 +289,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       play,
       pause,
       seek,
+      playArticleNow,
+      addArticleToQueue,
+      removeQueueItem,
+      moveQueueItem: moveQueueItemCallback,
       selectQueueItem,
       next,
       setDuration,
@@ -218,11 +301,15 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       resetTrackProgress,
     }),
     [
+      addArticleToQueue,
+      moveQueueItemCallback,
       next,
       pause,
       play,
+      playArticleNow,
       reportPlaybackError,
       resetTrackProgress,
+      removeQueueItem,
       seek,
       selectQueueItem,
       setDuration,
@@ -253,6 +340,41 @@ function areStringArraysEqual(first: string[], second: string[]) {
     first.length === second.length &&
     first.every((value, index) => value === second[index])
   );
+}
+
+function appendUnique(values: string[], value: string) {
+  return values.includes(value) ? values : [...values, value];
+}
+
+function moveQueueItem(
+  queueItemIds: string[],
+  queueItemId: string,
+  direction: "up" | "down",
+  currentQueueItemId: string | null,
+) {
+  if (queueItemId === currentQueueItemId) {
+    return queueItemIds;
+  }
+
+  const currentIndex = queueItemIds.indexOf(queueItemId);
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+  if (
+    currentIndex < 0 ||
+    targetIndex < 0 ||
+    targetIndex >= queueItemIds.length ||
+    queueItemIds[targetIndex] === currentQueueItemId
+  ) {
+    return queueItemIds;
+  }
+
+  const nextQueueItemIds = [...queueItemIds];
+  const targetQueueItemId = nextQueueItemIds[targetIndex];
+
+  nextQueueItemIds[targetIndex] = queueItemId;
+  nextQueueItemIds[currentIndex] = targetQueueItemId;
+
+  return nextQueueItemIds;
 }
 
 function createResetTrackProgressState(durationSeconds?: number | null) {

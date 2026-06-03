@@ -19,6 +19,7 @@
 - `docs/tasks/08-audio-track-generation-cache.md`: issue #8 に対応する音声トラック生成とキャッシュタスクの実装計画
 - `docs/tasks/09-zenn-rate-limit-resilient-article-library.md`: issue #14 に対応する Zenn API rate limit 対策タスクの実装計画
 - `docs/tasks/10-playback-controls-track-state-management.md`: issue #11 に対応する再生操作とトラック状態管理タスクの実装計画
+- `docs/tasks/12-queue-management-continuous-playback.md`: issue #12 に対応するキュー管理画面と連続再生タスクの実装計画
 
 ## Commands
 
@@ -36,4 +37,5 @@
 - 記事本文を取得し、見出し・段落・引用・リスト・コードブロックを共通 `ArticleContent` 形式へ抽出する provider / service を追加済み
 - コードブロックを逐語読みしない変換と、TTS 向けナレーション台本生成を追加済み
 - 生成中 / ready / failed を扱う `AudioTrack` 生成 service と in-memory cache を追加済み
-- 実 TTS provider / backend 接続、永続キャッシュ、詳細な連続再生制御は今後追加予定
+- 記事の明示的なキュー追加 / 削除 / 並び替えと、Next / 音声終了時の連続再生制御を追加済み
+- 実 TTS provider / backend 接続、永続キャッシュ、キュー永続化は今後追加予定

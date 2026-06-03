@@ -155,11 +155,52 @@
   font-size: 0.76rem;
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.queueStatus {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .actionLink {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.08);
   color: var(--color-text-primary);
   font-size: 0.88rem;
   font-weight: 600;
   text-decoration: none;
+}
+
+.secondaryAction {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.04);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.secondaryAction:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+  background: rgb(255 255 255 / 0.03);
 }
 
 .stateCard {

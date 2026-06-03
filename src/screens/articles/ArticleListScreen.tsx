@@ -9,7 +9,8 @@ export function ArticleListScreen() {
   const { articles, errorMessage, retry, status } = useArticleLibrary();
   const {
     state: { currentQueueItemId, queueItemIds },
-    dispatch,
+    addArticleToQueue,
+    playArticleNow,
   } = usePlayback();
   const { getTrackByArticleId } = useAudioTracks();
 
@@ -69,12 +70,14 @@ export function ArticleListScreen() {
       {status === "success" ? (
         <ul className={styles.list}>
           {articles.map((article, index) => {
+            const isQueued = queueItemIds.includes(article.id);
             const viewModel = toArticleListItemViewModel(
               article,
               getTrackByArticleId(article.id),
               {
                 index,
                 isCurrent: article.id === currentQueueItemId,
+                isQueued,
               },
             );
 
@@ -106,18 +109,28 @@ export function ArticleListScreen() {
                         ))}
                       </div>
                     ) : null}
-                    <Link
-                      className={styles.actionLink}
-                      to="/player"
-                      onClick={() => {
-                        dispatch({
-                          type: "setCurrentQueueItem",
-                          queueItemId: viewModel.id,
-                        });
-                      }}
-                    >
-                      {viewModel.isCurrent ? "再生画面へ" : "この順で聴く"}
-                    </Link>
+                    <div className={styles.actions}>
+                      <span className={styles.queueStatus}>
+                        {viewModel.queueStatusLabel}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.secondaryAction}
+                        disabled={viewModel.isQueued}
+                        onClick={() => addArticleToQueue(viewModel.id)}
+                      >
+                        {viewModel.isQueued ? "追加済み" : "キューに追加"}
+                      </button>
+                      <Link
+                        className={styles.actionLink}
+                        to="/player"
+                        onClick={() => {
+                          playArticleNow(viewModel.id);
+                        }}
+                      >
+                        {viewModel.isCurrent ? "再生画面へ" : "今すぐ再生"}
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </li>
