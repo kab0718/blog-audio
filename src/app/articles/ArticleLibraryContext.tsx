@@ -122,10 +122,24 @@ export function useArticleLibrary() {
 }
 
 async function fetchArticleLibraryArticles() {
-  const [zennArticles, qiitaArticles] = await Promise.all([
+  const articleResults = await Promise.allSettled([
     fetchZennLatestArticles(),
     fetchQiitaArticles(),
   ]);
 
-  return [...zennArticles, ...qiitaArticles];
+  const articles = articleResults.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
+
+  if (articles.length > 0 || articleResults.some(isFulfilledArticleResult)) {
+    return articles;
+  }
+
+  throw new Error("Article sources could not be loaded");
+}
+
+function isFulfilledArticleResult(
+  result: PromiseSettledResult<Article[]>,
+): result is PromiseFulfilledResult<Article[]> {
+  return result.status === "fulfilled";
 }

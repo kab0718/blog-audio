@@ -6,6 +6,18 @@ const ZENN_LATEST_ARTICLES_URL = "/api/zenn/articles?order=latest";
 const ZENN_ARTICLE_CONTENT_URL = "/api/zenn/articles";
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
+const ZENN_ARTICLES_CACHE_KEY = "blog-audio:zenn-latest-articles:v1";
+
+type ZennArticlesCachePayload = {
+  cachedAt: number | null;
+  cacheDate: string | null;
+  lastAttemptDate: string | null;
+  retryAfterUntil: number | null;
+  articles: Article[];
+};
+
+let zennLatestArticlesRequest: Promise<Article[]> | null = null;
+let zennLatestArticlesMemoryCache: ZennArticlesCachePayload | null = null;
 
 export type ZennArticleResponse = {
   id?: unknown;
@@ -22,25 +34,32 @@ export type ZennArticleResponse = {
 };
 
 export async function fetchZennLatestArticles(): Promise<Article[]> {
-  const response = await fetch(ZENN_LATEST_ARTICLES_URL, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const today = getLocalDateKey(new Date());
+  const cachedPayload = readZennArticlesCache();
 
-  if (!response.ok) {
-    throw new Error(`Zenn articles request failed: ${response.status}`);
+  if (cachedPayload?.cacheDate === today) {
+    return cachedPayload.articles;
   }
 
-  const payload: unknown = await response.json();
+  if (cachedPayload?.lastAttemptDate === today) {
+    if (cachedPayload.articles.length > 0) {
+      return cachedPayload.articles;
+    }
 
-  if (!isRecord(payload) || !Array.isArray(payload.articles)) {
-    throw new Error("Zenn articles response shape is not supported");
+    throw new Error("Zenn articles request already failed today");
   }
 
-  return payload.articles
-    .map((article) => toArticleFromZenn(article))
-    .filter((article): article is Article => article !== null);
+  if (zennLatestArticlesRequest) {
+    return zennLatestArticlesRequest;
+  }
+
+  zennLatestArticlesRequest = fetchFreshZennLatestArticles(today, cachedPayload);
+
+  try {
+    return await zennLatestArticlesRequest;
+  } finally {
+    zennLatestArticlesRequest = null;
+  }
 }
 
 export async function fetchZennArticleContent(
@@ -105,6 +124,168 @@ export function toArticleFromZenn(rawArticle: unknown): Article | null {
     tags: getTopicNames(rawArticle.topics),
     summary: toNonEmptyString(rawArticle.description) ?? undefined,
   };
+}
+
+async function fetchFreshZennLatestArticles(
+  today: string,
+  cachedPayload: ZennArticlesCachePayload | null,
+) {
+  const response = await fetch(ZENN_LATEST_ARTICLES_URL, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    writeZennArticlesCache({
+      ...createEmptyZennArticlesCache(),
+      ...cachedPayload,
+      lastAttemptDate: today,
+      retryAfterUntil: getRetryAfterUntil(response),
+    });
+
+    if (cachedPayload?.articles.length) {
+      return cachedPayload.articles;
+    }
+
+    throw new Error(`Zenn articles request failed: ${response.status}`);
+  }
+
+  const payload: unknown = await response.json();
+
+  if (!isRecord(payload) || !Array.isArray(payload.articles)) {
+    writeZennArticlesCache({
+      ...createEmptyZennArticlesCache(),
+      ...cachedPayload,
+      lastAttemptDate: today,
+      retryAfterUntil: null,
+    });
+
+    if (cachedPayload?.articles.length) {
+      return cachedPayload.articles;
+    }
+
+    throw new Error("Zenn articles response shape is not supported");
+  }
+
+  const articles = payload.articles
+    .map((article) => toArticleFromZenn(article))
+    .filter((article): article is Article => article !== null);
+
+  writeZennArticlesCache({
+    cachedAt: Date.now(),
+    cacheDate: today,
+    lastAttemptDate: today,
+    retryAfterUntil: null,
+    articles,
+  });
+
+  return articles;
+}
+
+function readZennArticlesCache() {
+  try {
+    const serializedPayload = getZennArticlesStorage()?.getItem(
+      ZENN_ARTICLES_CACHE_KEY,
+    );
+
+    if (!serializedPayload) {
+      return zennLatestArticlesMemoryCache;
+    }
+
+    const payload: unknown = JSON.parse(serializedPayload);
+
+    return toZennArticlesCachePayload(payload) ?? zennLatestArticlesMemoryCache;
+  } catch {
+    return zennLatestArticlesMemoryCache;
+  }
+}
+
+function writeZennArticlesCache(payload: ZennArticlesCachePayload) {
+  zennLatestArticlesMemoryCache = payload;
+
+  try {
+    getZennArticlesStorage()?.setItem(
+      ZENN_ARTICLES_CACHE_KEY,
+      JSON.stringify(payload),
+    );
+  } catch {
+    // Cache failures should not block article ingestion.
+  }
+}
+
+function getZennArticlesStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function toZennArticlesCachePayload(
+  payload: unknown,
+): ZennArticlesCachePayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  if (!Array.isArray(payload.articles)) {
+    return null;
+  }
+
+  const articles = payload.articles.filter(isArticle);
+
+  if (articles.length !== payload.articles.length) {
+    return null;
+  }
+
+  return {
+    cachedAt: toFiniteNumber(payload.cachedAt),
+    cacheDate: toNonEmptyString(payload.cacheDate),
+    lastAttemptDate: toNonEmptyString(payload.lastAttemptDate),
+    retryAfterUntil: toFiniteNumber(payload.retryAfterUntil),
+    articles,
+  };
+}
+
+function createEmptyZennArticlesCache(): ZennArticlesCachePayload {
+  return {
+    cachedAt: null,
+    cacheDate: null,
+    lastAttemptDate: null,
+    retryAfterUntil: null,
+    articles: [],
+  };
+}
+
+function getRetryAfterUntil(response: Response) {
+  const retryAfter = response.headers.get("Retry-After");
+
+  if (!retryAfter) {
+    return null;
+  }
+
+  const retryAfterSeconds = Number(retryAfter);
+
+  if (Number.isFinite(retryAfterSeconds)) {
+    return Date.now() + retryAfterSeconds * 1000;
+  }
+
+  const retryAfterDate = Date.parse(retryAfter);
+
+  return Number.isFinite(retryAfterDate) ? retryAfterDate : null;
+}
+
+function getLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function getSourceArticleId(article: Record<string, unknown>) {
@@ -204,6 +385,30 @@ function toNumber(value: unknown) {
   }
 
   return null;
+}
+
+function toFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function isArticle(value: unknown): value is Article {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.sourceArticleId === "string" &&
+    typeof value.title === "string" &&
+    value.sourceType === "zenn" &&
+    typeof value.author === "string" &&
+    typeof value.url === "string" &&
+    typeof value.estimatedDurationSeconds === "number" &&
+    Number.isFinite(value.estimatedDurationSeconds) &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === "string") &&
+    (value.summary === undefined || typeof value.summary === "string")
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
