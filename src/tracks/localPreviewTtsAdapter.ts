@@ -7,6 +7,9 @@ export type GeneratedAudioResource = {
 };
 
 const SAMPLE_RATE = 8_000;
+const PREVIEW_TONE_AMPLITUDE = 0.08;
+const PREVIEW_TONE_SECONDS = 0.18;
+const PREVIEW_TONE_INTERVAL_SECONDS = 1.4;
 
 export async function generateLocalPreviewAudioResource(
   script: NarrationScript,
@@ -20,7 +23,7 @@ export async function generateLocalPreviewAudioResource(
   return {
     playbackResource: {
       kind: "url",
-      url: createSilentWavObjectUrl(
+      url: createPreviewWavObjectUrl(
         normalizePreviewDuration(script.estimatedDurationSeconds),
       ),
     },
@@ -34,7 +37,7 @@ function waitForPreviewGeneration() {
   });
 }
 
-function createSilentWavObjectUrl(durationSeconds: number) {
+function createPreviewWavObjectUrl(durationSeconds: number) {
   const sampleCount = Math.max(1, Math.floor(SAMPLE_RATE * durationSeconds));
   const bytesPerSample = 2;
   const dataSize = sampleCount * bytesPerSample;
@@ -54,8 +57,39 @@ function createSilentWavObjectUrl(durationSeconds: number) {
   view.setUint16(34, 8 * bytesPerSample, true);
   writeAscii(view, 36, "data");
   view.setUint32(40, dataSize, true);
+  writePreviewToneSamples(view, sampleCount);
 
   return URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
+}
+
+function writePreviewToneSamples(view: DataView, sampleCount: number) {
+  const maxAmplitude = 32767 * PREVIEW_TONE_AMPLITUDE;
+  const toneSampleCount = Math.floor(SAMPLE_RATE * PREVIEW_TONE_SECONDS);
+  const intervalSampleCount = Math.max(
+    toneSampleCount,
+    Math.floor(SAMPLE_RATE * PREVIEW_TONE_INTERVAL_SECONDS),
+  );
+
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+    const intervalPosition = sampleIndex % intervalSampleCount;
+
+    if (intervalPosition >= toneSampleCount) {
+      continue;
+    }
+
+    const envelope = Math.sin(
+      Math.PI * (intervalPosition / Math.max(1, toneSampleCount - 1)),
+    );
+    const frequency = sampleIndex % (intervalSampleCount * 2) < intervalSampleCount
+      ? 440
+      : 554.37;
+    const sample =
+      Math.sin((2 * Math.PI * frequency * sampleIndex) / SAMPLE_RATE) *
+      maxAmplitude *
+      envelope;
+
+    view.setInt16(44 + sampleIndex * 2, sample, true);
+  }
 }
 
 function normalizePreviewDuration(durationSeconds: number) {
