@@ -18,6 +18,7 @@
 - `docs/tasks/07-tts-narration-script-generation.md`: issue #7 に対応する TTS 向けナレーション台本生成タスクの実装計画
 - `docs/tasks/08-audio-track-generation-cache.md`: issue #8 に対応する音声トラック生成とキャッシュタスクの実装計画
 - `docs/tasks/09-zenn-rate-limit-resilient-article-library.md`: issue #14 に対応する Zenn API rate limit 対策タスクの実装計画
+- `docs/tasks/10-playback-controls-track-state-management.md`: issue #11 に対応する再生操作とトラック状態管理タスクの実装計画
 
 ## Commands
 
