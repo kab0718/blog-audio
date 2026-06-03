@@ -6,7 +6,6 @@ export type GeneratedAudioResource = {
   durationSeconds: number;
 };
 
-const PREVIEW_AUDIO_SECONDS = 0.8;
 const SAMPLE_RATE = 8_000;
 
 export async function generateLocalPreviewAudioResource(
@@ -21,7 +20,9 @@ export async function generateLocalPreviewAudioResource(
   return {
     playbackResource: {
       kind: "url",
-      url: createSilentWavObjectUrl(PREVIEW_AUDIO_SECONDS),
+      url: createSilentWavObjectUrl(
+        normalizePreviewDuration(script.estimatedDurationSeconds),
+      ),
     },
     durationSeconds: script.estimatedDurationSeconds,
   };
@@ -55,6 +56,14 @@ function createSilentWavObjectUrl(durationSeconds: number) {
   view.setUint32(40, dataSize, true);
 
   return URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
+}
+
+function normalizePreviewDuration(durationSeconds: number) {
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return 1;
+  }
+
+  return Math.max(1, Math.ceil(durationSeconds));
 }
 
 function writeAscii(view: DataView, offset: number, value: string) {
