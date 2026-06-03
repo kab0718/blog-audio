@@ -33,6 +33,12 @@ export type ZennArticleResponse = {
   topics?: unknown;
 };
 
+export type ZennArticleDetailResponse = {
+  article?: {
+    body_html?: unknown;
+  };
+};
+
 export async function fetchZennLatestArticles(): Promise<Article[]> {
   const today = getLocalDateKey(new Date());
   const cachedPayload = readZennArticlesCache();
@@ -72,10 +78,10 @@ export async function fetchZennArticleContent(
   const response = await fetch(
     `${ZENN_ARTICLE_CONTENT_URL}/${encodeURIComponent(
       article.sourceArticleId,
-    )}/blob.md`,
+    )}`,
     {
       headers: {
-        Accept: "text/markdown, text/plain",
+        Accept: "application/json",
       },
     },
   );
@@ -84,13 +90,22 @@ export async function fetchZennArticleContent(
     throw new Error(`Zenn article content request failed: ${response.status}`);
   }
 
+  const payload: unknown = await response.json();
+  const bodyHtml = getZennArticleBodyHtml(payload);
+
+  if (!bodyHtml) {
+    throw new Error(
+      "Zenn article content response did not include article.body_html",
+    );
+  }
+
   return {
     articleId: article.id,
     sourceType: article.sourceType,
     sourceArticleId: article.sourceArticleId,
     url: article.url,
-    format: "markdown",
-    body: await response.text(),
+    format: "html",
+    body: bodyHtml,
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -181,6 +196,14 @@ async function fetchFreshZennLatestArticles(
   });
 
   return articles;
+}
+
+function getZennArticleBodyHtml(payload: unknown) {
+  if (!isRecord(payload) || !isRecord(payload.article)) {
+    return null;
+  }
+
+  return toNonEmptyString(payload.article.body_html);
 }
 
 function readZennArticlesCache() {
