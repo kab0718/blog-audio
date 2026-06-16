@@ -4,6 +4,7 @@ import type { NarrationScript } from "../types/narration";
 export type GeneratedAudioResource = {
   playbackResource: PlaybackResource;
   durationSeconds: number;
+  source: "local-preview" | "openai-tts";
 };
 
 const SAMPLE_RATE = 8_000;
@@ -28,6 +29,7 @@ export async function generateLocalPreviewAudioResource(
       ),
     },
     durationSeconds: script.estimatedDurationSeconds,
+    source: "local-preview",
   };
 }
 

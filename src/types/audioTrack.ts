@@ -5,7 +5,7 @@ export type PlaybackResource = {
   url: string;
 };
 
-export type AudioTrackSource = "local-preview";
+export type AudioTrackSource = "local-preview" | "openai-tts";
 
 export type AudioTrack = {
   id: string;

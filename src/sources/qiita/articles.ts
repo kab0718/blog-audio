@@ -1,8 +1,8 @@
 import type { Article } from "../../types/article";
 import type { RawArticleContentInput } from "../../types/articleContent";
 
-const QIITA_ITEMS_URL = "/api/qiita/items?page=1&per_page=8";
-const QIITA_ITEM_URL = "/api/qiita/items";
+const QIITA_ITEMS_URL = "/api/articles?source=qiita";
+const QIITA_ITEM_URL = "/api/article-content";
 const QIITA_BASE_URL = "https://qiita.com";
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
@@ -38,9 +38,7 @@ export async function fetchQiitaArticles(): Promise<Article[]> {
     throw new Error("Qiita articles response shape is not supported");
   }
 
-  return payload
-    .map((item) => toArticleFromQiita(item))
-    .filter((article): article is Article => article !== null);
+  return payload.filter(isArticle);
 }
 
 export async function fetchQiitaArticleContent(
@@ -50,14 +48,17 @@ export async function fetchQiitaArticleContent(
     throw new Error("Qiita content fetcher received a non-Qiita article");
   }
 
-  const response = await fetch(
-    `${QIITA_ITEM_URL}/${encodeURIComponent(article.sourceArticleId)}`,
-    {
-      headers: {
-        Accept: "application/json",
-      },
+  const requestUrl = new URL(QIITA_ITEM_URL, window.location.origin);
+  requestUrl.searchParams.set("source", article.sourceType);
+  requestUrl.searchParams.set("articleId", article.id);
+  requestUrl.searchParams.set("sourceArticleId", article.sourceArticleId);
+  requestUrl.searchParams.set("url", article.url);
+
+  const response = await fetch(requestUrl, {
+    headers: {
+      Accept: "application/json",
     },
-  );
+  });
 
   if (!response.ok) {
     throw new Error(`Qiita article content request failed: ${response.status}`);
@@ -65,26 +66,11 @@ export async function fetchQiitaArticleContent(
 
   const payload: unknown = await response.json();
 
-  if (!isRecord(payload)) {
+  if (!isRawQiitaArticleContentInput(payload, article.id)) {
     throw new Error("Qiita article content response shape is not supported");
   }
 
-  const markdownBody = toNonEmptyString(payload.body);
-  const renderedBody = toNonEmptyString(payload.rendered_body);
-
-  if (!markdownBody && !renderedBody) {
-    throw new Error("Qiita article content response did not include a body");
-  }
-
-  return {
-    articleId: article.id,
-    sourceType: article.sourceType,
-    sourceArticleId: article.sourceArticleId,
-    url: article.url,
-    format: markdownBody ? "markdown" : "html",
-    body: markdownBody ?? renderedBody ?? "",
-    fetchedAt: new Date().toISOString(),
-  };
+  return payload;
 }
 
 export function toArticleFromQiita(rawItem: unknown): Article | null {
@@ -203,4 +189,40 @@ function toNonEmptyString(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isArticle(value: unknown): value is Article {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.sourceArticleId === "string" &&
+    typeof value.title === "string" &&
+    value.sourceType === "qiita" &&
+    typeof value.author === "string" &&
+    typeof value.url === "string" &&
+    typeof value.estimatedDurationSeconds === "number" &&
+    Number.isFinite(value.estimatedDurationSeconds) &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === "string") &&
+    (value.summary === undefined || typeof value.summary === "string")
+  );
+}
+
+function isRawQiitaArticleContentInput(
+  value: unknown,
+  articleId: string,
+): value is RawArticleContentInput {
+  return (
+    isRecord(value) &&
+    value.articleId === articleId &&
+    value.sourceType === "qiita" &&
+    typeof value.sourceArticleId === "string" &&
+    typeof value.url === "string" &&
+    (value.format === "markdown" || value.format === "html") &&
+    typeof value.body === "string" &&
+    typeof value.fetchedAt === "string"
+  );
 }

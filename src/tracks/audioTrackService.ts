@@ -5,6 +5,7 @@ import {
   generateLocalPreviewAudioResource,
   type GeneratedAudioResource,
 } from "./localPreviewTtsAdapter";
+import { generateRealTtsAudioResource } from "./realTtsAdapter";
 
 export type TrackGenerationAdapter = (
   script: NarrationScript,
@@ -29,7 +30,7 @@ export function createGeneratingAudioTrack(
 export async function generateAudioTrack(
   article: Article,
   script: NarrationScript,
-  adapter: TrackGenerationAdapter = generateLocalPreviewAudioResource,
+  adapter: TrackGenerationAdapter = getDefaultTrackGenerationAdapter(),
 ): Promise<AudioTrack> {
   const generatedAudio = await adapter(script);
 
@@ -40,7 +41,7 @@ export async function generateAudioTrack(
     playbackResource: generatedAudio.playbackResource,
     durationSeconds: generatedAudio.durationSeconds,
     generatedAt: new Date().toISOString(),
-    source: "local-preview",
+    source: generatedAudio.source,
     narrationVersion: script.version,
   };
 }
@@ -65,4 +66,10 @@ export function createFailedAudioTrack(
 
 function buildAudioTrackId(articleId: string) {
   return `track:${articleId}`;
+}
+
+function getDefaultTrackGenerationAdapter(): TrackGenerationAdapter {
+  return import.meta.env.VITE_TTS_PROVIDER === "local-preview"
+    ? generateLocalPreviewAudioResource
+    : generateRealTtsAudioResource;
 }

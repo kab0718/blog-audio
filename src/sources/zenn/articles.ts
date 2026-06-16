@@ -2,8 +2,8 @@ import type { Article } from "../../types/article";
 import type { RawArticleContentInput } from "../../types/articleContent";
 
 const ZENN_BASE_URL = "https://zenn.dev";
-const ZENN_DAILY_POPULAR_ARTICLES_URL = "/api/zenn/articles?order=daily";
-const ZENN_ARTICLE_CONTENT_URL = "/api/zenn/articles";
+const ZENN_DAILY_POPULAR_ARTICLES_URL = "/api/articles?source=zenn&order=daily";
+const ZENN_ARTICLE_CONTENT_URL = "/api/article-content";
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
 const ZENN_ARTICLES_CACHE_KEY = "blog-audio:zenn-daily-popular-articles:v1";
@@ -78,39 +78,29 @@ export async function fetchZennArticleContent(
     throw new Error("Zenn content fetcher received a non-Zenn article");
   }
 
-  const response = await fetch(
-    `${ZENN_ARTICLE_CONTENT_URL}/${encodeURIComponent(
-      article.sourceArticleId,
-    )}`,
-    {
-      headers: {
-        Accept: "application/json",
-      },
+  const requestUrl = new URL(ZENN_ARTICLE_CONTENT_URL, window.location.origin);
+  requestUrl.searchParams.set("source", article.sourceType);
+  requestUrl.searchParams.set("articleId", article.id);
+  requestUrl.searchParams.set("sourceArticleId", article.sourceArticleId);
+  requestUrl.searchParams.set("url", article.url);
+
+  const response = await fetch(requestUrl, {
+    headers: {
+      Accept: "application/json",
     },
-  );
+  });
 
   if (!response.ok) {
     throw new Error(`Zenn article content request failed: ${response.status}`);
   }
 
   const payload: unknown = await response.json();
-  const bodyHtml = getZennArticleBodyHtml(payload);
 
-  if (!bodyHtml) {
-    throw new Error(
-      "Zenn article content response did not include article.body_html",
-    );
+  if (!isRawZennArticleContentInput(payload, article.id)) {
+    throw new Error("Zenn article content response shape is not supported");
   }
 
-  return {
-    articleId: article.id,
-    sourceType: article.sourceType,
-    sourceArticleId: article.sourceArticleId,
-    url: article.url,
-    format: "html",
-    body: bodyHtml,
-    fetchedAt: new Date().toISOString(),
-  };
+  return payload;
 }
 
 export function toArticleFromZenn(rawArticle: unknown): Article | null {
@@ -171,7 +161,7 @@ async function fetchFreshZennDailyPopularArticles(
 
   const payload: unknown = await response.json();
 
-  if (!isRecord(payload) || !Array.isArray(payload.articles)) {
+  if (!Array.isArray(payload)) {
     writeZennArticlesCache({
       ...createEmptyZennArticlesCache(),
       ...cachedPayload,
@@ -186,9 +176,7 @@ async function fetchFreshZennDailyPopularArticles(
     throw new Error("Zenn articles response shape is not supported");
   }
 
-  const articles = payload.articles
-    .map((article) => toArticleFromZenn(article))
-    .filter((article): article is Article => article !== null);
+  const articles = payload.filter(isArticle);
 
   writeZennArticlesCache({
     cachedAt: Date.now(),
@@ -199,14 +187,6 @@ async function fetchFreshZennDailyPopularArticles(
   });
 
   return articles;
-}
-
-function getZennArticleBodyHtml(payload: unknown) {
-  if (!isRecord(payload) || !isRecord(payload.article)) {
-    return null;
-  }
-
-  return toNonEmptyString(payload.article.body_html);
 }
 
 function readZennArticlesCache() {
@@ -441,4 +421,20 @@ function isArticle(value: unknown): value is Article {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isRawZennArticleContentInput(
+  value: unknown,
+  articleId: string,
+): value is RawArticleContentInput {
+  return (
+    isRecord(value) &&
+    value.articleId === articleId &&
+    value.sourceType === "zenn" &&
+    typeof value.sourceArticleId === "string" &&
+    typeof value.url === "string" &&
+    value.format === "html" &&
+    typeof value.body === "string" &&
+    typeof value.fetchedAt === "string"
+  );
 }

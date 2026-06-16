@@ -7,6 +7,7 @@
 ## Documents
 
 - `docs/blog_audio_player.md`: MVP の要件・優先順位・画面イメージ・読み上げ方針
+- `docs/api_boundary.md`: client と server-side / local API 境界の contract
 - `docs/codex_best_practices.md`: Codex 開発運用のベストプラクティス調査メモ
 - `docs/codex_skills.md`: このプロジェクトで使う Codex skills の一覧と用途
 - `docs/tasks/01-app-shell.md`: issue #1 に対応するアプリ骨格タスクの実装計画
@@ -28,6 +29,11 @@
 - `npm run build`: TypeScript の型チェック付きで本番ビルドする
 - `npm run preview`: ビルド結果をローカル確認する
 
+## Environment
+
+- `OPENAI_API_KEY`: `/api/tts` で OpenAI Speech API を呼ぶための server-side API key
+- `VITE_TTS_PROVIDER=local-preview`: 実 TTS の代わりに開発用 preview tone を使う場合に設定する
+
 ## Status
 
 - モバイル向け Web アプリ骨格を追加済み
@@ -38,4 +44,6 @@
 - コードブロックを逐語読みしない変換と、TTS 向けナレーション台本生成を追加済み
 - 生成中 / ready / failed を扱う `AudioTrack` 生成 service と in-memory cache を追加済み
 - 記事の明示的なキュー追加 / 削除 / 並び替えと、Next / 音声終了時の連続再生制御を追加済み
-- 実 TTS provider / backend 接続、永続キャッシュ、キュー永続化は今後追加予定
+- 再生速度変更とスリープタイマーを追加済み
+- Zenn / Qiita / TTS provider を同一 origin API 境界へ寄せ、OpenAI Speech API による実 TTS 生成を追加済み
+- 永続キャッシュ、キュー永続化、PWA 実機検証は今後追加予定

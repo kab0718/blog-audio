@@ -24,18 +24,19 @@
 - [13-zenn-article-content-html-fetch.md](./13-zenn-article-content-html-fetch.md): Zenn 記事本文取得の詳細 JSON 化
 - [14-mobile-article-list-screen.md](./14-mobile-article-list-screen.md): モバイル記事一覧画面
 - [15-mobile-player-screen.md](./15-mobile-player-screen.md): モバイルプレーヤー画面
-
-## 未実装
-
 - [16-playback-speed-sleep-timer.md](./16-playback-speed-sleep-timer.md): 再生速度変更とスリープタイマー
 - [17-real-tts-audio-generation.md](./17-real-tts-audio-generation.md): 実 TTS 音声生成
 - [18-production-api-boundary.md](./18-production-api-boundary.md): 本番用 API 境界
+
+## 未実装
+
 - [19-persisted-queue-playback-restore.md](./19-persisted-queue-playback-restore.md): キューと再生状態の復元
 - [20-persistent-audio-track-cache.md](./20-persistent-audio-track-cache.md): 生成済み音声の永続キャッシュ
 - [21-pwa-mobile-device-playback-validation.md](./21-pwa-mobile-device-playback-validation.md): PWA とスマホ実機再生検証
 
 ## 補足
 
-- [08-audio-track-generation-cache.md](./08-audio-track-generation-cache.md) は local preview adapter による MVP 実装済みとして扱う。実 TTS provider 連携は [17-real-tts-audio-generation.md](./17-real-tts-audio-generation.md) の範囲。
+- [08-audio-track-generation-cache.md](./08-audio-track-generation-cache.md) は in-memory cache による MVP 実装済みとして扱う。永続 cache は [20-persistent-audio-track-cache.md](./20-persistent-audio-track-cache.md) の範囲。
 - [09-zenn-rate-limit-resilient-article-library.md](./09-zenn-rate-limit-resilient-article-library.md) の cache は Zenn 記事一覧向けで、生成済み音声の永続 cache は [20-persistent-audio-track-cache.md](./20-persistent-audio-track-cache.md) の範囲。
 - [14-mobile-article-list-screen.md](./14-mobile-article-list-screen.md) と [15-mobile-player-screen.md](./15-mobile-player-screen.md) は現行 CSS/画面実装で MVP 実装済みとして扱う。スマホ実機での PWA 検証は [21-pwa-mobile-device-playback-validation.md](./21-pwa-mobile-device-playback-validation.md) の範囲。
+- [18-production-api-boundary.md](./18-production-api-boundary.md) は同一 origin API contract と Vite dev/preview middleware までを MVP 実装済みとして扱う。本番 deployment target への移植は運用タスクとして別途判断する。
