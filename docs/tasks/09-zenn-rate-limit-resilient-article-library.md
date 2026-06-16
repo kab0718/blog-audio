@@ -64,8 +64,8 @@
 
 ### Functional requirements
 
-- `fetchZennLatestArticles()` は当日分の cache がある場合、外部 request なしで `Article[]` を返せる
-- `fetchZennLatestArticles()` は in-flight request を共有し、同時呼び出しで同じ Zenn endpoint を複数回叩かない
+- `fetchZennDailyPopularArticles()` は当日分の cache がある場合、外部 request なしで `Article[]` を返せる
+- `fetchZennDailyPopularArticles()` は in-flight request を共有し、同時呼び出しで同じ Zenn endpoint を複数回叩かない
 - Zenn response が成功した場合、正規化済み `Article[]` と保存時刻を cache へ保存できる
 - Zenn response が失敗した場合も当日の取得試行日を保存し、同じ日付での再取得を抑制できる
 - Zenn response が 429 または fetch 失敗の場合、利用可能な stale cache があればそれを返せる
@@ -87,7 +87,7 @@
 ### Proposed approach
 
 - `src/sources/zenn/articles.ts` に cache key、日次取得判定、retry suppression の定数と、storage 読み書き helper を追加する
-- `fetchZennLatestArticles()` の外側に module-level の in-flight promise を持ち、同時取得を dedupe する
+- `fetchZennDailyPopularArticles()` の外側に module-level の in-flight promise を持ち、同時取得を dedupe する
 - cache hit 判定は cache の取得対象日がブラウザのローカル日付と一致するかを基本にし、同じ日付では外部 request を省略する
 - 外部 request 失敗時は当日の取得試行を記録し、`Retry-After` を含む source error を作り、stale cache があれば fallback として返す
 - `ArticleLibraryContext` の `fetchArticleLibraryArticles()` を `Promise.allSettled` 相当の集約に変更し、成功 source の記事を結合する
@@ -133,7 +133,7 @@
 
 ## 8. Implementation Plan
 
-1. 現状の `fetchZennLatestArticles()` と `ArticleLibraryContext` の呼び出し経路を確認し、日次 cache 判定、stale fallback、retry suppression の最小定数を決める
+1. 現状の `fetchZennDailyPopularArticles()` と `ArticleLibraryContext` の呼び出し経路を確認し、日次 cache 判定、stale fallback、retry suppression の最小定数を決める
 2. `src/sources/zenn/articles.ts` に cache payload 型、storage helper、`Retry-After` parse helper を追加し、storage 不可や破損 payload を安全に無視できるようにする
 3. Zenn 一覧取得に module-level in-flight promise と日次 cache hit を追加し、成功時に正規化済み `Article[]`、取得対象日、最終取得試行日を cache へ保存する
 4. Zenn の 429 / fetch 失敗時に最終取得試行日を保存し、stale cache fallback と retry suppression を適用し、cache がない場合は source error として上位へ伝える

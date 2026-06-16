@@ -2,7 +2,7 @@
 
 ## 1. Task Summary
 
-- Goal: Zenn の最新記事一覧を取得し、既存 UI と再生キューが扱える共通 `Article` 配列へ正規化する
+- Goal: Zenn の記事一覧を取得し、既存 UI と再生キューが扱える共通 `Article` 配列へ正規化する
 - User value: まず Zenn から記事を選べる入口を作り、1記事=1トラックの MVP 体験を実データで検証できる
 - Related priorities: smartphone playback UX, natural listening experience, continuous playback / queue behavior, simple MVP scope
 - Source docs:
@@ -16,7 +16,7 @@
 
 ### In scope
 
-- Zenn 全体の最新記事一覧を取得する provider を追加する
+- Zenn 全体の記事一覧を取得する provider を追加する
 - Zenn の article response から MVP の `Article` 契約へ必要なメタ情報を正規化する
 - `sourceType="zenn"`、詳細取得用の `sourceArticleId`、記事 URL を保持する
 - 一覧表示用にタイトル、著者、source、推定再生時間、任意の summary / tags を供給できる形にする
@@ -33,8 +33,8 @@
 
 ### Assumptions
 
-- MVP の取得対象は Zenn 全体の最新記事一覧に固定する
-- ブラウザは同一 origin の `/api/zenn/articles?order=latest` を呼び、Vite dev server が `https://zenn.dev/api/articles?order=latest` へ proxy する
+- MVP の取得対象は Zenn 全体のデイリー人気記事一覧に固定する
+- ブラウザは同一 origin の `/api/zenn/articles?order=daily` を呼び、Vite dev server が `https://zenn.dev/api/articles?order=daily` へ proxy する
 - Zenn の endpoint は公式に安定保証された API として扱わず、response 変更や取得失敗に備えて正規化層で defensive に処理する
 - `Article.summary` は実一覧で欠落しうるため、任意値として扱う
 - 取得成功後にキューへ article ids を同期するが、自動再生は開始しない
@@ -43,7 +43,7 @@
 
 ### Primary flow
 
-- ユーザーが記事一覧を開くと、Zenn の最新記事が既存の記事リスト UI に表示される
+- ユーザーが記事一覧を開くと、Zenn のデイリー人気記事が既存の記事リスト UI に表示される
 - 各 Zenn 記事には `Zenn` の source label、タイトル、著者、推定再生時間が表示される
 - Zenn 記事を選択またはキューへ渡す後続処理へ、`Article.id`、`sourceArticleId`、`url` が渡せる
 - 取得成功後、プレーヤーとキューは provider 固有の raw response ではなく共通 `Article` を参照する
@@ -85,7 +85,7 @@
 ### Proposed approach
 
 - `src/sources/zenn/` に provider 境界を作り、取得関数と mapper を分ける
-- `fetchZennLatestArticles()` は同一 origin の `/api/zenn/articles?order=latest` を呼び、成功時に `Article[]` を返す
+- `fetchZennDailyPopularArticles()` は同一 origin の `/api/zenn/articles?order=daily` を呼び、成功時に `Article[]` を返す
 - `toArticleFromZenn()` は Zenn article response の最小型から共通 `Article` へ変換する純粋関数にする
 - 記事一覧画面は provider を直接叩くのではなく、article library hook / adapter 経由で `loading`, `articles`, `error`, `retry` を受け取る
 - `Article.summary` を任意化し、view model は summary がある場合だけ一覧へ表示する
@@ -129,7 +129,7 @@
 
 1. 現状の `Article` 契約、`mockLibrary`、`PlaybackContext`、記事一覧画面の依存関係を確認し、実 provider 導入時に残す mock / fallback の責務を決める
 2. `Article.summary` を任意化し、view model と記事一覧 UI を summary なしでも表示できるようにする
-3. Zenn article の最小 TypeScript 型、`toArticleFromZenn()`、`fetchZennLatestArticles()` を `src/sources/zenn/` に追加する
+3. Zenn article の最小 TypeScript 型、`toArticleFromZenn()`、`fetchZennDailyPopularArticles()` を `src/sources/zenn/` に追加する
 4. 記事一覧の data source を mock 直参照から provider / hook / adapter 経由へ移し、loading / empty / error / success を表示できるようにする
 5. Playback 初期状態と queue 同期を調整し、非同期取得前の空状態と取得成功後の article ids を扱えるようにする
 6. App shell、player、queue の mock 直参照を必要最小限に減らし、共通 `Article` 参照へ寄せる
@@ -143,7 +143,7 @@
   - `npm run build`
   - `npm run preview`
 - Manual checks:
-  - スマホ幅で記事一覧を開き、Zenn 最新記事が既存のリスト UI で表示されることを確認する
+  - スマホ幅で記事一覧を開き、Zenn デイリー人気記事が既存のリスト UI で表示されることを確認する
   - Zenn 記事の source label、著者、推定再生時間、summary なし表示がスマホ幅で重ならないことを確認する
   - Zenn 取得失敗時と空配列時に、記事一覧画面が横スクロールやクラッシュなしで表示されることを確認する
   - 取得成功後に queue 件数が記事一覧と同期し、player / queue が Zenn raw response なしで表示されることを確認する

@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { fetchQiitaArticles } from "../../sources/qiita/articles";
-import { fetchZennLatestArticles } from "../../sources/zenn/articles";
+import { fetchZennDailyPopularArticles } from "../../sources/zenn/articles";
 import type { Article } from "../../types/article";
 
 export type ArticleLibraryStatus = "loading" | "success" | "empty" | "error";
@@ -123,7 +123,7 @@ export function useArticleLibrary() {
 
 async function fetchArticleLibraryArticles() {
   const articleResults = await Promise.allSettled([
-    fetchZennLatestArticles(),
+    fetchZennDailyPopularArticles(),
     fetchQiitaArticles(),
   ]);
 

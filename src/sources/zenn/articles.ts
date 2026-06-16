@@ -2,11 +2,11 @@ import type { Article } from "../../types/article";
 import type { RawArticleContentInput } from "../../types/articleContent";
 
 const ZENN_BASE_URL = "https://zenn.dev";
-const ZENN_LATEST_ARTICLES_URL = "/api/zenn/articles?order=latest";
+const ZENN_DAILY_POPULAR_ARTICLES_URL = "/api/zenn/articles?order=daily";
 const ZENN_ARTICLE_CONTENT_URL = "/api/zenn/articles";
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
-const ZENN_ARTICLES_CACHE_KEY = "blog-audio:zenn-latest-articles:v1";
+const ZENN_ARTICLES_CACHE_KEY = "blog-audio:zenn-daily-popular-articles:v1";
 
 type ZennArticlesCachePayload = {
   cachedAt: number | null;
@@ -16,8 +16,8 @@ type ZennArticlesCachePayload = {
   articles: Article[];
 };
 
-let zennLatestArticlesRequest: Promise<Article[]> | null = null;
-let zennLatestArticlesMemoryCache: ZennArticlesCachePayload | null = null;
+let zennDailyPopularArticlesRequest: Promise<Article[]> | null = null;
+let zennDailyPopularArticlesMemoryCache: ZennArticlesCachePayload | null = null;
 
 export type ZennArticleResponse = {
   id?: unknown;
@@ -39,7 +39,7 @@ export type ZennArticleDetailResponse = {
   };
 };
 
-export async function fetchZennLatestArticles(): Promise<Article[]> {
+export async function fetchZennDailyPopularArticles(): Promise<Article[]> {
   const today = getLocalDateKey(new Date());
   const cachedPayload = readZennArticlesCache();
 
@@ -55,16 +55,19 @@ export async function fetchZennLatestArticles(): Promise<Article[]> {
     throw new Error("Zenn articles request already failed today");
   }
 
-  if (zennLatestArticlesRequest) {
-    return zennLatestArticlesRequest;
+  if (zennDailyPopularArticlesRequest) {
+    return zennDailyPopularArticlesRequest;
   }
 
-  zennLatestArticlesRequest = fetchFreshZennLatestArticles(today, cachedPayload);
+  zennDailyPopularArticlesRequest = fetchFreshZennDailyPopularArticles(
+    today,
+    cachedPayload,
+  );
 
   try {
-    return await zennLatestArticlesRequest;
+    return await zennDailyPopularArticlesRequest;
   } finally {
-    zennLatestArticlesRequest = null;
+    zennDailyPopularArticlesRequest = null;
   }
 }
 
@@ -141,11 +144,11 @@ export function toArticleFromZenn(rawArticle: unknown): Article | null {
   };
 }
 
-async function fetchFreshZennLatestArticles(
+async function fetchFreshZennDailyPopularArticles(
   today: string,
   cachedPayload: ZennArticlesCachePayload | null,
 ) {
-  const response = await fetch(ZENN_LATEST_ARTICLES_URL, {
+  const response = await fetch(ZENN_DAILY_POPULAR_ARTICLES_URL, {
     headers: {
       Accept: "application/json",
     },
@@ -213,19 +216,21 @@ function readZennArticlesCache() {
     );
 
     if (!serializedPayload) {
-      return zennLatestArticlesMemoryCache;
+      return zennDailyPopularArticlesMemoryCache;
     }
 
     const payload: unknown = JSON.parse(serializedPayload);
 
-    return toZennArticlesCachePayload(payload) ?? zennLatestArticlesMemoryCache;
+    return (
+      toZennArticlesCachePayload(payload) ?? zennDailyPopularArticlesMemoryCache
+    );
   } catch {
-    return zennLatestArticlesMemoryCache;
+    return zennDailyPopularArticlesMemoryCache;
   }
 }
 
 function writeZennArticlesCache(payload: ZennArticlesCachePayload) {
-  zennLatestArticlesMemoryCache = payload;
+  zennDailyPopularArticlesMemoryCache = payload;
 
   try {
     getZennArticlesStorage()?.setItem(
