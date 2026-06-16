@@ -4,10 +4,15 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
 } from "react";
 import type { PlaybackState, PlayerStatus } from "../../types/playback";
+
+const DEFAULT_PLAYBACK_RATE = 1;
+const MIN_PLAYBACK_RATE = 0.5;
+const MAX_PLAYBACK_RATE = 2;
 
 type PlaybackAction =
   | {
@@ -28,6 +33,10 @@ type PlaybackAction =
   | { type: "setPlayerStatus"; playerStatus: PlayerStatus }
   | { type: "setPlaybackPosition"; positionSeconds: number }
   | { type: "setPlaybackDuration"; durationSeconds: number | null }
+  | { type: "setPlaybackRate"; playbackRate: number }
+  | { type: "setSleepTimer"; endsAt: number }
+  | { type: "clearSleepTimer" }
+  | { type: "expireSleepTimer" }
   | { type: "setSeeking"; isSeeking: boolean }
   | { type: "setPlaybackError"; playbackError: string | null }
   | { type: "resetTrackProgress"; durationSeconds?: number | null }
@@ -52,6 +61,9 @@ type PlaybackContextValue = {
   ) => void;
   next: (options?: { autoplay?: boolean }) => void;
   setDuration: (durationSeconds: number | null) => void;
+  setPlaybackRate: (playbackRate: number) => void;
+  setSleepTimer: (durationMinutes: number) => void;
+  clearSleepTimer: () => void;
   setSeeking: (isSeeking: boolean) => void;
   reportPlaybackError: (playbackError: string | null) => void;
   resetTrackProgress: (durationSeconds?: number | null) => void;
@@ -61,6 +73,8 @@ const initialState: PlaybackState = {
   currentQueueItemId: null,
   queueItemIds: [],
   playerStatus: "idle",
+  playbackRate: DEFAULT_PLAYBACK_RATE,
+  sleepTimerEndsAt: null,
   positionSeconds: 0,
   durationSeconds: null,
   isSeeking: false,
@@ -165,6 +179,27 @@ function playbackReducer(
         ...state,
         durationSeconds: normalizeDuration(action.durationSeconds),
       };
+    case "setPlaybackRate":
+      return {
+        ...state,
+        playbackRate: normalizePlaybackRate(action.playbackRate),
+      };
+    case "setSleepTimer":
+      return {
+        ...state,
+        sleepTimerEndsAt: action.endsAt,
+      };
+    case "clearSleepTimer":
+      return {
+        ...state,
+        sleepTimerEndsAt: null,
+      };
+    case "expireSleepTimer":
+      return {
+        ...state,
+        playerStatus: "paused",
+        sleepTimerEndsAt: null,
+      };
     case "setSeeking":
       return {
         ...state,
@@ -212,6 +247,22 @@ function playbackReducer(
 
 export function PlaybackProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(playbackReducer, initialState);
+
+  useEffect(() => {
+    if (!state.sleepTimerEndsAt) {
+      return;
+    }
+
+    const delayMs = Math.max(0, state.sleepTimerEndsAt - Date.now());
+    const timeoutId = window.setTimeout(() => {
+      dispatch({ type: "expireSleepTimer" });
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [state.sleepTimerEndsAt]);
+
   const play = useCallback(
     () => dispatch({ type: "setPlayerStatus", playerStatus: "playing" }),
     [],
@@ -267,6 +318,22 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "setPlaybackDuration", durationSeconds }),
     [],
   );
+  const setPlaybackRate = useCallback(
+    (playbackRate: number) =>
+      dispatch({ type: "setPlaybackRate", playbackRate }),
+    [],
+  );
+  const setSleepTimer = useCallback((durationMinutes: number) => {
+    const safeDurationMinutes = Math.max(1, Math.floor(durationMinutes));
+    dispatch({
+      type: "setSleepTimer",
+      endsAt: Date.now() + safeDurationMinutes * 60 * 1000,
+    });
+  }, []);
+  const clearSleepTimer = useCallback(
+    () => dispatch({ type: "clearSleepTimer" }),
+    [],
+  );
   const setSeeking = useCallback(
     (isSeeking: boolean) => dispatch({ type: "setSeeking", isSeeking }),
     [],
@@ -296,12 +363,16 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       selectQueueItem,
       next,
       setDuration,
+      setPlaybackRate,
+      setSleepTimer,
+      clearSleepTimer,
       setSeeking,
       reportPlaybackError,
       resetTrackProgress,
     }),
     [
       addArticleToQueue,
+      clearSleepTimer,
       moveQueueItemCallback,
       next,
       pause,
@@ -313,7 +384,9 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       seek,
       selectQueueItem,
       setDuration,
+      setPlaybackRate,
       setSeeking,
+      setSleepTimer,
       state,
     ],
   );
@@ -392,4 +465,15 @@ function normalizeDuration(durationSeconds: number | null) {
   }
 
   return Math.max(0, durationSeconds);
+}
+
+function normalizePlaybackRate(playbackRate: number) {
+  if (!Number.isFinite(playbackRate)) {
+    return DEFAULT_PLAYBACK_RATE;
+  }
+
+  return Math.min(
+    MAX_PLAYBACK_RATE,
+    Math.max(MIN_PLAYBACK_RATE, Number(playbackRate.toFixed(2))),
+  );
 }
