@@ -1,24 +1,12 @@
+import { getApiErrorMessage } from "../api/apiError";
 import type { NarrationScript } from "../types/narration";
-import {
-  generateLocalPreviewAudioResource,
-  type GeneratedAudioResource,
-} from "./localPreviewTtsAdapter";
+import type { GeneratedAudioResource } from "./localPreviewTtsAdapter";
 
 type TtsApiResponse = {
   audioBase64?: unknown;
   mimeType?: unknown;
   durationSeconds?: unknown;
   source?: unknown;
-};
-
-type TtsApiError = {
-  code?: unknown;
-  message?: unknown;
-};
-
-type TtsErrorInfo = {
-  code: string | null;
-  message: string;
 };
 
 export async function generateRealTtsAudioResource(
@@ -42,13 +30,7 @@ export async function generateRealTtsAudioResource(
   });
 
   if (!response.ok) {
-    const errorInfo = await getTtsErrorInfo(response);
-
-    if (errorInfo.code === "tts_api_key_missing") {
-      return generateLocalPreviewAudioResource(script);
-    }
-
-    throw new Error(errorInfo.message);
+    throw new Error(await getApiErrorMessage(response, "TTS API request failed"));
   }
 
   const payload = (await response.json()) as TtsApiResponse;
@@ -74,25 +56,6 @@ export async function generateRealTtsAudioResource(
         : script.estimatedDurationSeconds,
     source: "openai-tts",
   };
-}
-
-async function getTtsErrorInfo(response: Response): Promise<TtsErrorInfo> {
-  try {
-    const payload = (await response.json()) as TtsApiError;
-    const code = typeof payload.code === "string" ? payload.code.trim() : "";
-    const message =
-      typeof payload.message === "string" ? payload.message.trim() : "";
-
-    return {
-      code: code || null,
-      message: message || `TTS API request failed: ${response.status}`,
-    };
-  } catch {
-    return {
-      code: null,
-      message: `TTS API request failed: ${response.status}`,
-    };
-  }
 }
 
 function base64ToBlob(base64: string, mimeType: string) {

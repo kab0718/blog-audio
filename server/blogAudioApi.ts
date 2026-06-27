@@ -8,6 +8,10 @@ const OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech";
 const OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
 const OPENAI_TTS_VOICE = "marin";
 const OPENAI_TTS_INPUT_LIMIT = 4096;
+const PROVIDER_REQUEST_TIMEOUT_MS = 15_000;
+const ARTICLE_LIST_CACHE_TTL_MS = 10 * 60 * 1000;
+const ARTICLE_CONTENT_CACHE_TTL_MS = 30 * 60 * 1000;
+const TTS_AUDIO_CACHE_MAX_ENTRIES = 4;
 const DEFAULT_ESTIMATED_DURATION_SECONDS = 5 * 60;
 const LETTERS_PER_MINUTE = 500;
 const SUMMARY_MAX_LENGTH = 120;
@@ -21,6 +25,7 @@ type ApiHandlerResult = "handled" | "next";
 type TtsRequestPayload = {
   chunks?: unknown;
   estimatedDurationSeconds?: unknown;
+  narrationVersion?: unknown;
 };
 
 type TtsChunk = {
@@ -39,6 +44,21 @@ type ParsedWave = {
   sampleRate: number;
   bitsPerSample: number;
 };
+
+type ProviderJsonCacheEntry = {
+  cachedAt: number;
+  value: unknown;
+};
+
+type TtsApiSuccessPayload = {
+  audioBase64: string;
+  mimeType: "audio/wav";
+  durationSeconds: number | null;
+  source: "openai-tts";
+};
+
+const providerJsonCache = new Map<string, ProviderJsonCacheEntry>();
+const ttsAudioCache = new Map<string, TtsApiSuccessPayload>();
 
 export function blogAudioApiPlugin(options: BlogAudioApiOptions) {
   return {
@@ -92,11 +112,16 @@ async function handleApiRequest(
 
     return "next";
   } catch (error) {
-    sendJson(response, getErrorStatus(error), {
-      code: getErrorCode(error),
-      message:
-        error instanceof Error ? error.message : "API request could not be handled",
-    });
+    const payload = getErrorPayload(error);
+
+    if (typeof payload.retryAfterSeconds === "number") {
+      response.setHeader(
+        "Retry-After",
+        String(Math.ceil(payload.retryAfterSeconds)),
+      );
+    }
+
+    sendJson(response, getErrorStatus(error), payload);
     return "handled";
   }
 }
@@ -105,10 +130,19 @@ async function handleArticlesRequest(requestUrl: URL, response: any) {
   const source = requestUrl.searchParams.get("source");
 
   if (source === "zenn") {
-    const payload = await fetchJson(ZENN_ARTICLES_URL);
+    const payload = await fetchCachedProviderJson({
+      url: ZENN_ARTICLES_URL,
+      cacheKey: "articles:zenn:daily",
+      ttlMs: ARTICLE_LIST_CACHE_TTL_MS,
+      staleOnError: true,
+    });
 
     if (!isRecord(payload) || !Array.isArray(payload.articles)) {
-      throw new ApiError(502, "unsupported_response_shape", "Zenn articles response shape is not supported");
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Zenn articles response shape is not supported",
+      );
     }
 
     sendJson(
@@ -122,10 +156,19 @@ async function handleArticlesRequest(requestUrl: URL, response: any) {
   }
 
   if (source === "qiita") {
-    const payload = await fetchJson(QIITA_ITEMS_URL);
+    const payload = await fetchCachedProviderJson({
+      url: QIITA_ITEMS_URL,
+      cacheKey: "articles:qiita:latest",
+      ttlMs: ARTICLE_LIST_CACHE_TTL_MS,
+      staleOnError: true,
+    });
 
     if (!Array.isArray(payload)) {
-      throw new ApiError(502, "unsupported_response_shape", "Qiita articles response shape is not supported");
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Qiita articles response shape is not supported",
+      );
     }
 
     sendJson(
@@ -148,22 +191,37 @@ async function handleArticleContentRequest(requestUrl: URL, response: any) {
   const url = requestUrl.searchParams.get("url");
 
   if (!source || !articleId || !sourceArticleId || !url) {
-    throw new ApiError(400, "bad_request", "Article content request is missing required query parameters");
+    throw new ApiError(
+      400,
+      "bad_request",
+      "Article content request is missing required query parameters",
+    );
   }
 
   if (source === "zenn") {
-    const payload = await fetchJson(
-      `${ZENN_ARTICLE_URL}/${encodeURIComponent(sourceArticleId)}`,
-    );
+    const payload = await fetchCachedProviderJson({
+      url: `${ZENN_ARTICLE_URL}/${encodeURIComponent(sourceArticleId)}`,
+      cacheKey: `article-content:zenn:${sourceArticleId}`,
+      ttlMs: ARTICLE_CONTENT_CACHE_TTL_MS,
+      staleOnError: true,
+    });
 
     if (!isRecord(payload) || !isRecord(payload.article)) {
-      throw new ApiError(502, "unsupported_response_shape", "Zenn article content response shape is not supported");
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Zenn article content response shape is not supported",
+      );
     }
 
     const bodyHtml = toNonEmptyString(payload.article.body_html);
 
     if (!bodyHtml) {
-      throw new ApiError(502, "unsupported_response_shape", "Zenn article content response did not include article.body_html");
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Zenn article content response did not include article.body_html",
+      );
     }
 
     sendJson(response, 200, {
@@ -179,19 +237,30 @@ async function handleArticleContentRequest(requestUrl: URL, response: any) {
   }
 
   if (source === "qiita") {
-    const payload = await fetchJson(
-      `${QIITA_ITEM_URL}/${encodeURIComponent(sourceArticleId)}`,
-    );
+    const payload = await fetchCachedProviderJson({
+      url: `${QIITA_ITEM_URL}/${encodeURIComponent(sourceArticleId)}`,
+      cacheKey: `article-content:qiita:${sourceArticleId}`,
+      ttlMs: ARTICLE_CONTENT_CACHE_TTL_MS,
+      staleOnError: true,
+    });
 
     if (!isRecord(payload)) {
-      throw new ApiError(502, "unsupported_response_shape", "Qiita article content response shape is not supported");
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Qiita article content response shape is not supported",
+      );
     }
 
     const markdownBody = toNonEmptyString(payload.body);
     const renderedBody = toNonEmptyString(payload.rendered_body);
 
     if (!markdownBody && !renderedBody) {
-      throw new ApiError(502, "unsupported_response_shape", "Qiita article content response did not include a body");
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Qiita article content response did not include a body",
+      );
     }
 
     sendJson(response, 200, {
@@ -215,37 +284,64 @@ async function handleTtsRequest(
   options: BlogAudioApiOptions,
 ) {
   if (!options.openAiApiKey) {
-    throw new ApiError(501, "tts_api_key_missing", "OPENAI_API_KEY is required for real TTS generation");
+    throw new ApiError(
+      501,
+      "tts_api_key_missing",
+      "OPENAI_API_KEY is required for real TTS generation",
+    );
   }
 
-  const payload = JSON.parse(await readRequestText(request)) as TtsRequestPayload;
+  const payload = parseJsonRequestPayload(
+    await readRequestText(request),
+  ) as TtsRequestPayload;
   const chunks = toTtsChunks(payload.chunks);
 
   if (chunks.length === 0) {
-    throw new ApiError(400, "bad_request", "TTS request did not include narratable chunks");
+    throw new ApiError(
+      400,
+      "bad_request",
+      "TTS request did not include narratable chunks",
+    );
   }
 
+  const cacheKey = buildTtsCacheKey(payload, chunks);
+  const cachedPayload = ttsAudioCache.get(cacheKey);
+
+  if (cachedPayload) {
+    sendJson(response, 200, cachedPayload);
+    return;
+  }
+
+  const providerChunks = chunks.flatMap(splitTtsChunkForProviderLimit);
   const waveFiles = await Promise.all(
-    chunks.map((chunk) => generateOpenAiSpeech(chunk.text, options.openAiApiKey!)),
+    providerChunks.map((chunk) =>
+      generateOpenAiSpeech(chunk.text, options.openAiApiKey!),
+    ),
   );
   const combinedWave = concatenateWaveFiles(waveFiles);
-
-  sendJson(response, 200, {
+  const responsePayload: TtsApiSuccessPayload = {
     audioBase64: encodeBase64(combinedWave.bytes),
     mimeType: "audio/wav",
     durationSeconds:
       combinedWave.durationSeconds ??
       toFiniteNumber(payload.estimatedDurationSeconds),
     source: "openai-tts",
-  });
+  };
+
+  writeTtsAudioCache(cacheKey, responsePayload);
+  sendJson(response, 200, responsePayload);
 }
 
 async function generateOpenAiSpeech(text: string, openAiApiKey: string) {
   if (text.length > OPENAI_TTS_INPUT_LIMIT) {
-    throw new ApiError(400, "tts_input_too_long", "A narration chunk exceeds the TTS input limit");
+    throw new ApiError(
+      400,
+      "tts_input_too_long",
+      "A narration chunk exceeds the TTS input limit",
+    );
   }
 
-  const response = await fetch(OPENAI_SPEECH_URL, {
+  const response = await fetchProvider(OPENAI_SPEECH_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${openAiApiKey}`,
@@ -255,39 +351,138 @@ async function generateOpenAiSpeech(text: string, openAiApiKey: string) {
       model: OPENAI_TTS_MODEL,
       voice: OPENAI_TTS_VOICE,
       input: text,
-      instructions:
-        "Read this technical blog narration clearly in Japanese when the text is Japanese. Keep code explanations concise and natural.",
+      instructions: [
+        "Read this technical blog narration clearly in Japanese when the text is Japanese.",
+        "Keep code explanations concise and natural.",
+      ].join(" "),
       response_format: "wav",
     }),
   });
 
-  if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      "tts_provider_failed",
-      `OpenAI speech request failed: ${response.status}`,
-    );
-  }
-
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function fetchJson(url: string) {
-  const response = await fetch(url, {
+async function fetchCachedProviderJson({
+  url,
+  cacheKey,
+  ttlMs,
+  staleOnError,
+}: {
+  url: string;
+  cacheKey: string;
+  ttlMs: number;
+  staleOnError: boolean;
+}) {
+  const cachedEntry = providerJsonCache.get(cacheKey);
+
+  if (cachedEntry && Date.now() - cachedEntry.cachedAt <= ttlMs) {
+    return cachedEntry.value;
+  }
+
+  try {
+    const value = await fetchProviderJson(url);
+    providerJsonCache.set(cacheKey, {
+      cachedAt: Date.now(),
+      value,
+    });
+    return value;
+  } catch (error) {
+    if (staleOnError && cachedEntry) {
+      return cachedEntry.value;
+    }
+
+    throw error;
+  }
+}
+
+async function fetchProviderJson(url: string) {
+  const response = await fetchProvider(url, {
     headers: {
       Accept: "application/json",
     },
   });
 
-  if (!response.ok) {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
     throw new ApiError(
-      response.status,
+      502,
+      "unsupported_response_shape",
+      "Provider response was not valid JSON",
+    );
+  }
+}
+
+async function fetchProvider(
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, PROVIDER_REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw toProviderApiError(response);
+    }
+
+    return response;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError(
+        504,
+        "provider_timeout",
+        "Provider request timed out",
+      );
+    }
+
+    throw new ApiError(
+      502,
       "provider_request_failed",
-      `Provider request failed: ${response.status}`,
+      "Provider request failed",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function toProviderApiError(response: Response) {
+  const retryAfterSeconds = getRetryAfterSeconds(response);
+
+  if (response.status === 429) {
+    return new ApiError(
+      429,
+      "rate_limited",
+      "Provider rate limit reached",
+      retryAfterSeconds,
     );
   }
 
-  return response.json() as Promise<unknown>;
+  if (response.status === 408 || response.status === 504) {
+    return new ApiError(
+      504,
+      "provider_timeout",
+      "Provider request timed out",
+      retryAfterSeconds,
+    );
+  }
+
+  return new ApiError(
+    502,
+    "provider_request_failed",
+    `Provider request failed: ${response.status}`,
+    retryAfterSeconds,
+  );
 }
 
 function concatenateWaveFiles(waveFiles: Uint8Array[]) {
@@ -300,7 +495,11 @@ function concatenateWaveFiles(waveFiles: Uint8Array[]) {
 
   parsedWaves.forEach((wave) => {
     if (!isCompatibleWave(firstWave, wave)) {
-      throw new ApiError(502, "tts_audio_incompatible", "TTS provider returned incompatible audio chunks");
+      throw new ApiError(
+        502,
+        "tts_audio_incompatible",
+        "TTS provider returned incompatible audio chunks",
+      );
     }
   });
 
@@ -339,7 +538,11 @@ function parseWaveFile(bytes: Uint8Array): ParsedWave {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   if (readAscii(bytes, 0, 4) !== "RIFF" || readAscii(bytes, 8, 4) !== "WAVE") {
-    throw new ApiError(502, "tts_audio_unsupported", "TTS provider did not return a WAV file");
+    throw new ApiError(
+      502,
+      "tts_audio_unsupported",
+      "TTS provider did not return a WAV file",
+    );
   }
 
   let offset = 12;
@@ -382,7 +585,11 @@ function parseWaveFile(bytes: Uint8Array): ParsedWave {
     dataSize === null ||
     dataSizeOffset === null
   ) {
-    throw new ApiError(502, "tts_audio_unsupported", "TTS provider returned unsupported WAV data");
+    throw new ApiError(
+      502,
+      "tts_audio_unsupported",
+      "TTS provider returned unsupported WAV data",
+    );
   }
 
   return {
@@ -429,6 +636,103 @@ function toTtsChunks(chunks: unknown): TtsChunk[] {
     })
     .filter((chunk): chunk is TtsChunk => chunk !== null)
     .sort((first, second) => first.order - second.order);
+}
+
+function splitTtsChunkForProviderLimit(chunk: TtsChunk): TtsChunk[] {
+  if (chunk.text.length <= OPENAI_TTS_INPUT_LIMIT) {
+    return [chunk];
+  }
+
+  return splitTextForProviderLimit(chunk.text, OPENAI_TTS_INPUT_LIMIT).map(
+    (text, index) => ({
+      ...chunk,
+      id: `${chunk.id}:part:${index + 1}`,
+      order: chunk.order + index / 1000,
+      text,
+    }),
+  );
+}
+
+function splitTextForProviderLimit(text: string, maxCharacters: number) {
+  const sentences = text
+    .match(/[^。！？.!?]+[。！？.!?]?/g)
+    ?.map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (!sentences?.length) {
+    return splitLongTextForProviderLimit(text, maxCharacters);
+  }
+
+  const parts: string[] = [];
+  let current = "";
+
+  sentences.forEach((sentence) => {
+    if (sentence.length > maxCharacters) {
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
+
+      parts.push(...splitLongTextForProviderLimit(sentence, maxCharacters));
+      return;
+    }
+
+    const candidate = current ? `${current} ${sentence}` : sentence;
+
+    if (candidate.length > maxCharacters && current) {
+      parts.push(current);
+      current = sentence;
+      return;
+    }
+
+    current = candidate;
+  });
+
+  if (current) {
+    parts.push(current);
+  }
+
+  return parts;
+}
+
+function splitLongTextForProviderLimit(text: string, maxCharacters: number) {
+  const parts: string[] = [];
+  let index = 0;
+
+  while (index < text.length) {
+    parts.push(text.slice(index, index + maxCharacters));
+    index += maxCharacters;
+  }
+
+  return parts;
+}
+
+function buildTtsCacheKey(payload: TtsRequestPayload, chunks: TtsChunk[]) {
+  return JSON.stringify({
+    provider: "openai",
+    model: OPENAI_TTS_MODEL,
+    voice: OPENAI_TTS_VOICE,
+    narrationVersion: toNonEmptyString(payload.narrationVersion),
+    chunks: chunks.map((chunk) => ({
+      id: chunk.id,
+      order: chunk.order,
+      text: chunk.text,
+    })),
+  });
+}
+
+function writeTtsAudioCache(cacheKey: string, payload: TtsApiSuccessPayload) {
+  ttsAudioCache.set(cacheKey, payload);
+
+  while (ttsAudioCache.size > TTS_AUDIO_CACHE_MAX_ENTRIES) {
+    const firstKey = ttsAudioCache.keys().next().value;
+
+    if (typeof firstKey !== "string") {
+      break;
+    }
+
+    ttsAudioCache.delete(firstKey);
+  }
 }
 
 function toArticleFromZenn(rawArticle: unknown) {
@@ -658,6 +962,14 @@ async function readRequestText(request: any) {
   return new TextDecoder().decode(body);
 }
 
+function parseJsonRequestPayload(text: string) {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new ApiError(400, "bad_request", "Request body must be valid JSON");
+  }
+}
+
 function sendJson(response: any, statusCode: number, payload: unknown) {
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "application/json");
@@ -670,6 +982,49 @@ function getErrorStatus(error: unknown) {
 
 function getErrorCode(error: unknown) {
   return error instanceof ApiError ? error.code : "internal_error";
+}
+
+function getErrorPayload(error: unknown) {
+  const payload: {
+    code: string;
+    message: string;
+    retryAfterSeconds?: number;
+  } = {
+    code: getErrorCode(error),
+    message:
+      error instanceof Error ? error.message : "API request could not be handled",
+  };
+
+  if (
+    error instanceof ApiError &&
+    typeof error.retryAfterSeconds === "number"
+  ) {
+    payload.retryAfterSeconds = error.retryAfterSeconds;
+  }
+
+  return payload;
+}
+
+function getRetryAfterSeconds(response: Response) {
+  const retryAfter = response.headers.get("Retry-After");
+
+  if (!retryAfter) {
+    return undefined;
+  }
+
+  const retryAfterSeconds = Number(retryAfter);
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    return retryAfterSeconds;
+  }
+
+  const retryAfterDate = Date.parse(retryAfter);
+
+  if (!Number.isFinite(retryAfterDate)) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.ceil((retryAfterDate - Date.now()) / 1000));
 }
 
 function readAscii(bytes: Uint8Array, offset: number, length: number) {
@@ -728,6 +1083,7 @@ class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }

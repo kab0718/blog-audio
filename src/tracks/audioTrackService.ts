@@ -1,5 +1,5 @@
 import type { Article } from "../types/article";
-import type { AudioTrack } from "../types/audioTrack";
+import type { AudioTrack, AudioTrackSource } from "../types/audioTrack";
 import type { NarrationScript } from "../types/narration";
 import {
   generateLocalPreviewAudioResource,
@@ -14,6 +14,7 @@ export type TrackGenerationAdapter = (
 export function createGeneratingAudioTrack(
   article: Article,
   narrationVersion: string | null = null,
+  source: AudioTrackSource = getDefaultAudioTrackSource(),
 ): AudioTrack {
   return {
     id: buildAudioTrackId(article.id),
@@ -22,7 +23,7 @@ export function createGeneratingAudioTrack(
     playbackResource: null,
     durationSeconds: null,
     generatedAt: null,
-    source: "local-preview",
+    source,
     narrationVersion,
   };
 }
@@ -50,6 +51,7 @@ export function createFailedAudioTrack(
   article: Article,
   errorMessage: string,
   narrationVersion: string | null = null,
+  source: AudioTrackSource = getDefaultAudioTrackSource(),
 ): AudioTrack {
   return {
     id: buildAudioTrackId(article.id),
@@ -58,7 +60,7 @@ export function createFailedAudioTrack(
     playbackResource: null,
     durationSeconds: null,
     generatedAt: null,
-    source: "local-preview",
+    source,
     narrationVersion,
     errorMessage,
   };
@@ -69,7 +71,13 @@ function buildAudioTrackId(articleId: string) {
 }
 
 function getDefaultTrackGenerationAdapter(): TrackGenerationAdapter {
-  return import.meta.env.VITE_TTS_PROVIDER === "local-preview"
+  return getDefaultAudioTrackSource() === "local-preview"
     ? generateLocalPreviewAudioResource
     : generateRealTtsAudioResource;
+}
+
+function getDefaultAudioTrackSource(): AudioTrackSource {
+  return import.meta.env.VITE_TTS_PROVIDER === "local-preview"
+    ? "local-preview"
+    : "openai-tts";
 }

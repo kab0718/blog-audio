@@ -32,7 +32,7 @@
 ## Environment
 
 - `OPENAI_API_KEY`: `/api/tts` で OpenAI Speech API を呼ぶための server-side API key
-- `VITE_TTS_PROVIDER=local-preview`: 実 TTS の代わりに開発用 preview tone を使う場合に設定する
+- `VITE_TTS_PROVIDER=local-preview`: 実 TTS の代わりに開発用 preview tone を使う場合に設定する。未設定時に `OPENAI_API_KEY` がない場合、音声生成は failed track になる
 
 ## Status
 
