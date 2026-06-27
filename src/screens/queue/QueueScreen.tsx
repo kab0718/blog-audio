@@ -8,6 +8,7 @@ export function QueueScreen() {
   const { getArticleById, status } = useArticleLibrary();
   const {
     state: { currentQueueItemId, queueItemIds },
+    clearQueue,
     moveQueueItem,
     removeQueueItem,
   } = usePlayback();
@@ -24,7 +25,17 @@ export function QueueScreen() {
   return (
     <section className={styles.screen}>
       <div className={styles.intro}>
-        <p className={styles.kicker}>Queue</p>
+        <div className={styles.introHeader}>
+          <p className={styles.kicker}>Queue</p>
+          <button
+            type="button"
+            className={styles.clearButton}
+            disabled={queueItemIds.length === 0}
+            onClick={clearQueue}
+          >
+            空にする
+          </button>
+        </div>
         <p className={styles.copy}>
           次に聴く記事を並べ替え、不要な待機記事を外せます。
         </p>

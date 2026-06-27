@@ -7,8 +7,13 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
 } from "react";
 import type { PlaybackState, PlayerStatus } from "../../types/playback";
+import {
+  readPersistedPlaybackState,
+  writePersistedPlaybackState,
+} from "./playbackPersistence";
 
 const DEFAULT_PLAYBACK_RATE = 1;
 const MIN_PLAYBACK_RATE = 0.5;
@@ -30,6 +35,13 @@ type PlaybackAction =
   | { type: "moveQueueItem"; queueItemId: string; direction: "up" | "down" }
   | { type: "setQueue"; queueItemIds: string[] }
   | { type: "syncQueueWithArticles"; articleIds: string[] }
+  | {
+      type: "hydratePlaybackState";
+      queueItemIds: string[];
+      currentQueueItemId: string | null;
+      positionSeconds: number;
+    }
+  | { type: "clearQueue" }
   | { type: "setPlayerStatus"; playerStatus: PlayerStatus }
   | { type: "setPlaybackPosition"; positionSeconds: number }
   | { type: "setPlaybackDuration"; durationSeconds: number | null }
@@ -55,6 +67,7 @@ type PlaybackContextValue = {
   addArticleToQueue: (articleId: string) => void;
   removeQueueItem: (queueItemId: string) => void;
   moveQueueItem: (queueItemId: string, direction: "up" | "down") => void;
+  clearQueue: () => void;
   selectQueueItem: (
     queueItemId: string,
     options?: { playerStatus?: PlayerStatus },
@@ -140,15 +153,19 @@ function playbackReducer(
         queueItemIds: action.queueItemIds,
       };
     case "syncQueueWithArticles": {
+      const availableArticleIds = new Set(action.articleIds);
+      const queueItemIds = state.queueItemIds.filter((queueItemId) =>
+        availableArticleIds.has(queueItemId),
+      );
       const currentQueueItemId =
         state.currentQueueItemId &&
-        action.articleIds.includes(state.currentQueueItemId)
+        queueItemIds.includes(state.currentQueueItemId)
           ? state.currentQueueItemId
-          : action.articleIds[0] ?? null;
+          : queueItemIds[0] ?? null;
 
       if (
         state.currentQueueItemId === currentQueueItemId &&
-        areStringArraysEqual(state.queueItemIds, action.articleIds)
+        areStringArraysEqual(state.queueItemIds, queueItemIds)
       ) {
         return state;
       }
@@ -158,10 +175,40 @@ function playbackReducer(
       return {
         ...state,
         currentQueueItemId,
-        queueItemIds: action.articleIds,
+        queueItemIds,
         ...(currentChanged ? createResetTrackProgressState() : {}),
       };
     }
+    case "hydratePlaybackState": {
+      const queueItemIds = uniqueStrings(action.queueItemIds);
+      const currentQueueItemId =
+        action.currentQueueItemId &&
+        queueItemIds.includes(action.currentQueueItemId)
+          ? action.currentQueueItemId
+          : queueItemIds[0] ?? null;
+
+      return {
+        ...state,
+        currentQueueItemId,
+        queueItemIds,
+        playerStatus: "idle",
+        positionSeconds: clampPosition(
+          action.positionSeconds,
+          state.durationSeconds,
+        ),
+        durationSeconds: null,
+        isSeeking: false,
+        playbackError: null,
+      };
+    }
+    case "clearQueue":
+      return {
+        ...state,
+        currentQueueItemId: null,
+        queueItemIds: [],
+        playerStatus: "idle",
+        ...createResetTrackProgressState(),
+      };
     case "setPlayerStatus":
       return {
         ...state,
@@ -172,12 +219,18 @@ function playbackReducer(
     case "setPlaybackPosition":
       return {
         ...state,
-        positionSeconds: Math.max(0, action.positionSeconds),
+        positionSeconds: clampPosition(
+          action.positionSeconds,
+          state.durationSeconds,
+        ),
       };
     case "setPlaybackDuration":
+      const durationSeconds = normalizeDuration(action.durationSeconds);
+
       return {
         ...state,
-        durationSeconds: normalizeDuration(action.durationSeconds),
+        durationSeconds,
+        positionSeconds: clampPosition(state.positionSeconds, durationSeconds),
       };
     case "setPlaybackRate":
       return {
@@ -246,7 +299,13 @@ function playbackReducer(
 }
 
 export function PlaybackProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(playbackReducer, initialState);
+  const [state, dispatch] = useReducer(
+    playbackReducer,
+    initialState,
+    getInitialPlaybackState,
+  );
+  const persistenceTimeoutRef = useRef<number | null>(null);
+  const lastPersistenceWriteAtRef = useRef(0);
 
   useEffect(() => {
     if (!state.sleepTimerEndsAt) {
@@ -262,6 +321,45 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timeoutId);
     };
   }, [state.sleepTimerEndsAt]);
+
+  useEffect(() => {
+    const elapsedMs = Date.now() - lastPersistenceWriteAtRef.current;
+    const shouldWriteImmediately =
+      elapsedMs >= 1500 || state.playerStatus !== "playing";
+
+    if (persistenceTimeoutRef.current !== null) {
+      window.clearTimeout(persistenceTimeoutRef.current);
+      persistenceTimeoutRef.current = null;
+    }
+
+    const writeState = () => {
+      writePersistedPlaybackState(state);
+      lastPersistenceWriteAtRef.current = Date.now();
+      persistenceTimeoutRef.current = null;
+    };
+
+    if (shouldWriteImmediately) {
+      writeState();
+      return;
+    }
+
+    persistenceTimeoutRef.current = window.setTimeout(
+      writeState,
+      1500 - elapsedMs,
+    );
+
+    return () => {
+      if (persistenceTimeoutRef.current !== null) {
+        window.clearTimeout(persistenceTimeoutRef.current);
+        persistenceTimeoutRef.current = null;
+      }
+    };
+  }, [
+    state.currentQueueItemId,
+    state.playerStatus,
+    state.positionSeconds,
+    state.queueItemIds,
+  ]);
 
   const play = useCallback(
     () => dispatch({ type: "setPlayerStatus", playerStatus: "playing" }),
@@ -299,6 +397,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "moveQueueItem", queueItemId, direction }),
     [],
   );
+  const clearQueue = useCallback(() => dispatch({ type: "clearQueue" }), []);
   const selectQueueItem = useCallback(
     (queueItemId: string, options?: { playerStatus?: PlayerStatus }) =>
       dispatch({
@@ -360,6 +459,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       addArticleToQueue,
       removeQueueItem,
       moveQueueItem: moveQueueItemCallback,
+      clearQueue,
       selectQueueItem,
       next,
       setDuration,
@@ -372,6 +472,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     }),
     [
       addArticleToQueue,
+      clearQueue,
       clearSleepTimer,
       moveQueueItemCallback,
       next,
@@ -417,6 +518,22 @@ function areStringArraysEqual(first: string[], second: string[]) {
 
 function appendUnique(values: string[], value: string) {
   return values.includes(value) ? values : [...values, value];
+}
+
+function uniqueStrings(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueValues: string[] = [];
+
+  values.forEach((value) => {
+    if (!value || seenValues.has(value)) {
+      return;
+    }
+
+    seenValues.add(value);
+    uniqueValues.push(value);
+  });
+
+  return uniqueValues;
 }
 
 function moveQueueItem(
@@ -467,6 +584,18 @@ function normalizeDuration(durationSeconds: number | null) {
   return Math.max(0, durationSeconds);
 }
 
+function clampPosition(positionSeconds: number, durationSeconds: number | null) {
+  const safePositionSeconds = Number.isFinite(positionSeconds)
+    ? Math.max(0, positionSeconds)
+    : 0;
+
+  if (durationSeconds === null) {
+    return safePositionSeconds;
+  }
+
+  return Math.min(safePositionSeconds, durationSeconds);
+}
+
 function normalizePlaybackRate(playbackRate: number) {
   if (!Number.isFinite(playbackRate)) {
     return DEFAULT_PLAYBACK_RATE;
@@ -476,4 +605,19 @@ function normalizePlaybackRate(playbackRate: number) {
     MAX_PLAYBACK_RATE,
     Math.max(MIN_PLAYBACK_RATE, Number(playbackRate.toFixed(2))),
   );
+}
+
+function getInitialPlaybackState(state: PlaybackState): PlaybackState {
+  const persistedState = readPersistedPlaybackState();
+
+  if (!persistedState) {
+    return state;
+  }
+
+  return playbackReducer(state, {
+    type: "hydratePlaybackState",
+    queueItemIds: persistedState.queueItemIds,
+    currentQueueItemId: persistedState.currentQueueItemId,
+    positionSeconds: persistedState.positionSeconds,
+  });
 }

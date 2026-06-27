@@ -28,7 +28,6 @@ export function PlayerScreen() {
     pause,
     play,
     reportPlaybackError,
-    resetTrackProgress,
     seek,
     selectQueueItem,
     setDuration,
@@ -73,8 +72,8 @@ export function PlayerScreen() {
   const canSeek = canPlay && resolvedDurationSeconds > 0;
 
   useEffect(() => {
-    resetTrackProgress(track?.durationSeconds ?? null);
-  }, [currentQueueItemId, resetTrackProgress, track?.durationSeconds]);
+    setDuration(track?.durationSeconds ?? null);
+  }, [currentQueueItemId, setDuration, track?.durationSeconds]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -204,8 +203,16 @@ export function PlayerScreen() {
             next({ autoplay: Boolean(nextQueueItemId) });
           }}
           onLoadedMetadata={(event) => {
-            setDuration(event.currentTarget.duration);
-            event.currentTarget.playbackRate = playbackRate;
+            const audio = event.currentTarget;
+            const resolvedMetadataDuration = normalizeDuration(audio.duration);
+            const nextPositionSeconds = clampSeconds(
+              positionSeconds,
+              resolvedMetadataDuration ?? 0,
+            );
+
+            setDuration(audio.duration);
+            audio.currentTime = nextPositionSeconds;
+            audio.playbackRate = playbackRate;
           }}
           onTimeUpdate={(event) => {
             if (!isSeeking) {

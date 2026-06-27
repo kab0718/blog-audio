@@ -16,6 +16,7 @@ export default function App() {
     <ArticleLibraryProvider>
       <AudioTrackProvider>
         <PlaybackProvider>
+          <PlaybackArticleLibrarySync />
           <AudioTrackQueueSync />
           <Routes>
             <Route element={<AppShell />}>
@@ -29,6 +30,24 @@ export default function App() {
       </AudioTrackProvider>
     </ArticleLibraryProvider>
   );
+}
+
+function PlaybackArticleLibrarySync() {
+  const { articles, status } = useArticleLibrary();
+  const { dispatch } = usePlayback();
+
+  useEffect(() => {
+    if (status !== "success" && status !== "empty") {
+      return;
+    }
+
+    dispatch({
+      type: "syncQueueWithArticles",
+      articleIds: articles.map((article) => article.id),
+    });
+  }, [articles, dispatch, status]);
+
+  return null;
 }
 
 function AudioTrackQueueSync() {

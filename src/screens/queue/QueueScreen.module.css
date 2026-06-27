@@ -8,6 +8,13 @@
   gap: 8px;
 }
 
+.introHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .kicker {
   margin: 0;
   color: var(--color-accent-soft);
@@ -133,7 +140,8 @@
 }
 
 .queueButton,
-.removeButton {
+.removeButton,
+.clearButton {
   min-height: 38px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 0.08);
@@ -149,8 +157,13 @@
   color: #ffd1d1;
 }
 
+.clearButton {
+  color: #ffd1d1;
+}
+
 .queueButton:disabled,
-.removeButton:disabled {
+.removeButton:disabled,
+.clearButton:disabled {
   cursor: not-allowed;
   color: var(--color-text-muted);
   background: rgb(255 255 255 / 0.03);

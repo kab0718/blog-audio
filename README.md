@@ -46,4 +46,5 @@
 - 記事の明示的なキュー追加 / 削除 / 並び替えと、Next / 音声終了時の連続再生制御を追加済み
 - 再生速度変更とスリープタイマーを追加済み
 - Zenn / Qiita / TTS provider を同一 origin API 境界へ寄せ、OpenAI Speech API による実 TTS 生成を追加済み
-- 永続キャッシュ、キュー永続化、PWA 実機検証は今後追加予定
+- queue / current article / 再生位置の localStorage 復元を追加済み
+- 永続キャッシュ、PWA 実機検証は今後追加予定
