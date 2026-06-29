@@ -6,7 +6,6 @@ import { toNowPlayingViewModel } from "../../view-models/library";
 import styles from "./PlayerScreen.module.css";
 
 const PLAYBACK_RATE_PRESETS = [0.8, 1, 1.2, 1.5, 2];
-const SLEEP_TIMER_PRESETS_MINUTES = [15, 30, 45, 60];
 
 export function PlayerScreen() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -21,9 +20,7 @@ export function PlayerScreen() {
       playerStatus,
       positionSeconds,
       queueItemIds,
-      sleepTimerEndsAt,
     },
-    clearSleepTimer,
     next,
     pause,
     play,
@@ -33,7 +30,6 @@ export function PlayerScreen() {
     setDuration,
     setPlaybackRate,
     setSeeking,
-    setSleepTimer,
   } = usePlayback();
   const { getTrackByArticleId, retryTrackForArticle } = useAudioTracks();
 
@@ -327,36 +323,6 @@ export function PlayerScreen() {
             ))}
           </div>
         </div>
-
-        <div className={styles.settingGroup}>
-          <div className={styles.settingHeader}>
-            <span className={styles.label}>Sleep timer</span>
-            <strong>{formatSleepTimerLabel(sleepTimerEndsAt)}</strong>
-          </div>
-          <div className={styles.segmentedControl}>
-            {SLEEP_TIMER_PRESETS_MINUTES.map((minutes) => (
-              <button
-                key={minutes}
-                type="button"
-                className={styles.segmentButton}
-                onClick={() => setSleepTimer(minutes)}
-              >
-                {minutes}m
-              </button>
-            ))}
-            <button
-              type="button"
-              className={
-                sleepTimerEndsAt
-                  ? styles.segmentButton
-                  : `${styles.segmentButton} ${styles.segmentButtonActive}`
-              }
-              onClick={clearSleepTimer}
-            >
-              Off
-            </button>
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -427,20 +393,6 @@ function formatDurationTimeLabel(totalSeconds: number) {
 
 function formatPlaybackRateLabel(playbackRate: number) {
   return `${playbackRate.toFixed(1).replace(/\.0$/, "")}x`;
-}
-
-function formatSleepTimerLabel(sleepTimerEndsAt: number | null) {
-  if (!sleepTimerEndsAt) {
-    return "Off";
-  }
-
-  const remainingSeconds = Math.max(
-    0,
-    Math.ceil((sleepTimerEndsAt - Date.now()) / 1000),
-  );
-  const remainingMinutes = Math.max(1, Math.ceil(remainingSeconds / 60));
-
-  return `${remainingMinutes} min left`;
 }
 
 function getSeekUnavailableCopy(status: string | undefined) {

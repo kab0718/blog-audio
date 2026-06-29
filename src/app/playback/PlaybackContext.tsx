@@ -46,9 +46,6 @@ type PlaybackAction =
   | { type: "setPlaybackPosition"; positionSeconds: number }
   | { type: "setPlaybackDuration"; durationSeconds: number | null }
   | { type: "setPlaybackRate"; playbackRate: number }
-  | { type: "setSleepTimer"; endsAt: number }
-  | { type: "clearSleepTimer" }
-  | { type: "expireSleepTimer" }
   | { type: "setSeeking"; isSeeking: boolean }
   | { type: "setPlaybackError"; playbackError: string | null }
   | { type: "resetTrackProgress"; durationSeconds?: number | null }
@@ -75,8 +72,6 @@ type PlaybackContextValue = {
   next: (options?: { autoplay?: boolean }) => void;
   setDuration: (durationSeconds: number | null) => void;
   setPlaybackRate: (playbackRate: number) => void;
-  setSleepTimer: (durationMinutes: number) => void;
-  clearSleepTimer: () => void;
   setSeeking: (isSeeking: boolean) => void;
   reportPlaybackError: (playbackError: string | null) => void;
   resetTrackProgress: (durationSeconds?: number | null) => void;
@@ -87,7 +82,6 @@ const initialState: PlaybackState = {
   queueItemIds: [],
   playerStatus: "idle",
   playbackRate: DEFAULT_PLAYBACK_RATE,
-  sleepTimerEndsAt: null,
   positionSeconds: 0,
   durationSeconds: null,
   isSeeking: false,
@@ -237,22 +231,6 @@ function playbackReducer(
         ...state,
         playbackRate: normalizePlaybackRate(action.playbackRate),
       };
-    case "setSleepTimer":
-      return {
-        ...state,
-        sleepTimerEndsAt: action.endsAt,
-      };
-    case "clearSleepTimer":
-      return {
-        ...state,
-        sleepTimerEndsAt: null,
-      };
-    case "expireSleepTimer":
-      return {
-        ...state,
-        playerStatus: "paused",
-        sleepTimerEndsAt: null,
-      };
     case "setSeeking":
       return {
         ...state,
@@ -306,21 +284,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   );
   const persistenceTimeoutRef = useRef<number | null>(null);
   const lastPersistenceWriteAtRef = useRef(0);
-
-  useEffect(() => {
-    if (!state.sleepTimerEndsAt) {
-      return;
-    }
-
-    const delayMs = Math.max(0, state.sleepTimerEndsAt - Date.now());
-    const timeoutId = window.setTimeout(() => {
-      dispatch({ type: "expireSleepTimer" });
-    }, delayMs);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [state.sleepTimerEndsAt]);
 
   useEffect(() => {
     const elapsedMs = Date.now() - lastPersistenceWriteAtRef.current;
@@ -422,17 +385,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "setPlaybackRate", playbackRate }),
     [],
   );
-  const setSleepTimer = useCallback((durationMinutes: number) => {
-    const safeDurationMinutes = Math.max(1, Math.floor(durationMinutes));
-    dispatch({
-      type: "setSleepTimer",
-      endsAt: Date.now() + safeDurationMinutes * 60 * 1000,
-    });
-  }, []);
-  const clearSleepTimer = useCallback(
-    () => dispatch({ type: "clearSleepTimer" }),
-    [],
-  );
   const setSeeking = useCallback(
     (isSeeking: boolean) => dispatch({ type: "setSeeking", isSeeking }),
     [],
@@ -464,8 +416,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       next,
       setDuration,
       setPlaybackRate,
-      setSleepTimer,
-      clearSleepTimer,
       setSeeking,
       reportPlaybackError,
       resetTrackProgress,
@@ -473,7 +423,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     [
       addArticleToQueue,
       clearQueue,
-      clearSleepTimer,
       moveQueueItemCallback,
       next,
       pause,
@@ -487,7 +436,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       setDuration,
       setPlaybackRate,
       setSeeking,
-      setSleepTimer,
       state,
     ],
   );

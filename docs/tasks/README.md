@@ -24,7 +24,7 @@
 - [13-zenn-article-content-html-fetch.md](./13-zenn-article-content-html-fetch.md): Zenn 記事本文取得の詳細 JSON 化
 - [14-mobile-article-list-screen.md](./14-mobile-article-list-screen.md): モバイル記事一覧画面
 - [15-mobile-player-screen.md](./15-mobile-player-screen.md): モバイルプレーヤー画面
-- [16-playback-speed-sleep-timer.md](./16-playback-speed-sleep-timer.md): 再生速度変更とスリープタイマー
+- [16-playback-speed-sleep-timer.md](./16-playback-speed-sleep-timer.md): 再生速度変更とスリープタイマーの実装履歴（スリープタイマーは issue #27 で削除）
 - [17-real-tts-audio-generation.md](./17-real-tts-audio-generation.md): 実 TTS 音声生成
 - [18-production-api-boundary.md](./18-production-api-boundary.md): 本番用 API 境界
 - [22-google-cloud-text-to-speech-setup.md](./22-google-cloud-text-to-speech-setup.md): Google Cloud Text-to-Speech 利用準備と認証設定

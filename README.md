@@ -60,7 +60,7 @@ Production では service account key file の直置きを避け、deployment pl
 - コードブロックを逐語読みしない変換と、TTS 向けナレーション台本生成を追加済み
 - 生成中 / ready / failed を扱う `AudioTrack` 生成 service と in-memory cache を追加済み
 - 記事の明示的なキュー追加 / 削除 / 並び替えと、Next / 音声終了時の連続再生制御を追加済み
-- 再生速度変更とスリープタイマーを追加済み
+- 再生速度変更を追加済み
 - Zenn / Qiita / TTS provider を同一 origin API 境界へ寄せ、Google Cloud Text-to-Speech による実 TTS 生成を追加済み
 - Google Cloud Text-to-Speech の project / billing / API / budget alert / local ADC / smoke test は準備済み
 - queue / current article / 再生位置の localStorage 復元を追加済み
