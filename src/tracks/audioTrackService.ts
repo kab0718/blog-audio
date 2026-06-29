@@ -79,5 +79,5 @@ function getDefaultTrackGenerationAdapter(): TrackGenerationAdapter {
 function getDefaultAudioTrackSource(): AudioTrackSource {
   return import.meta.env.VITE_TTS_PROVIDER === "local-preview"
     ? "local-preview"
-    : "openai-tts";
+    : "google-cloud-tts";
 }

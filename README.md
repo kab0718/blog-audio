@@ -36,7 +36,7 @@
 - `GOOGLE_CLOUD_TTS_VOICE=ja-JP-Neural2-B`: 初期利用 voice
 - `GOOGLE_CLOUD_TTS_AUDIO_ENCODING=MP3`: 生成音声の encoding
 - `GOOGLE_APPLICATION_CREDENTIALS`: service account key JSON を使う場合の local path。key file は repository に含めない
-- `OPENAI_API_KEY`: 現行の OpenAI Speech API adapter を使う間だけ必要な legacy env。Google Cloud TTS adapter 実装後に削除予定
+- `GOOGLE_CLOUD_TTS_API_KEY`: ADC を使えない server-side 環境向けの任意 API key。`VITE_` prefix は付けない
 - `VITE_TTS_PROVIDER=local-preview`: 実 TTS の代わりに開発用 preview tone を使う場合に設定する。未設定時の TTS provider failure は failed track になる
 
 Local development の Google Cloud 認証は Application Default Credentials を使う。
@@ -45,6 +45,8 @@ Local development の Google Cloud 認証は Application Default Credentials を
 gcloud auth application-default login
 gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 ```
+
+`/api/tts` が `provider_auth_failed` / 403 を返し、quota project が未設定という message が出る場合は、上記の `set-quota-project` を実行してから dev server を再起動する。
 
 Production では service account key file の直置きを避け、deployment platform の secret manager / workload identity / service account attachment を優先する。
 
@@ -59,7 +61,7 @@ Production では service account key file の直置きを避け、deployment pl
 - 生成中 / ready / failed を扱う `AudioTrack` 生成 service と in-memory cache を追加済み
 - 記事の明示的なキュー追加 / 削除 / 並び替えと、Next / 音声終了時の連続再生制御を追加済み
 - 再生速度変更とスリープタイマーを追加済み
-- Zenn / Qiita / TTS provider を同一 origin API 境界へ寄せ、OpenAI Speech API による実 TTS 生成を追加済み
-- Google Cloud Text-to-Speech への切り替えに向けた project / billing / API / budget alert / local ADC / smoke test は準備済み
+- Zenn / Qiita / TTS provider を同一 origin API 境界へ寄せ、Google Cloud Text-to-Speech による実 TTS 生成を追加済み
+- Google Cloud Text-to-Speech の project / billing / API / budget alert / local ADC / smoke test は準備済み
 - queue / current article / 再生位置の localStorage 復元を追加済み
 - 永続キャッシュ、PWA 実機検証は今後追加予定

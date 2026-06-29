@@ -9,7 +9,12 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       blogAudioApiPlugin({
-        openAiApiKey: env.OPENAI_API_KEY,
+        googleApplicationCredentials: env.GOOGLE_APPLICATION_CREDENTIALS,
+        googleCloudProject: env.GOOGLE_CLOUD_PROJECT,
+        googleCloudTtsApiKey: env.GOOGLE_CLOUD_TTS_API_KEY,
+        googleCloudTtsLanguageCode: env.GOOGLE_CLOUD_TTS_LANGUAGE_CODE,
+        googleCloudTtsVoice: env.GOOGLE_CLOUD_TTS_VOICE,
+        googleCloudTtsAudioEncoding: env.GOOGLE_CLOUD_TTS_AUDIO_ENCODING,
       }),
     ],
   };

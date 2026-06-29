@@ -1,13 +1,24 @@
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
 const ZENN_ARTICLES_URL = "https://zenn.dev/api/articles?order=daily";
 const ZENN_ARTICLE_URL = "https://zenn.dev/api/articles";
 const QIITA_ITEMS_URL = "https://qiita.com/api/v2/items?page=1&per_page=8";
 const QIITA_ITEM_URL = "https://qiita.com/api/v2/items";
 const ZENN_BASE_URL = "https://zenn.dev";
 const QIITA_BASE_URL = "https://qiita.com";
-const OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech";
-const OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
-const OPENAI_TTS_VOICE = "marin";
-const OPENAI_TTS_INPUT_LIMIT = 4096;
+const GOOGLE_TTS_SYNTHESIZE_URL =
+  "https://texttospeech.googleapis.com/v1/text:synthesize";
+const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_AUTH_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
+const GOOGLE_TTS_INPUT_LIMIT_BYTES = 5_000;
+const GOOGLE_METADATA_TOKEN_URL =
+  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+const GOOGLE_METADATA_TIMEOUT_MS = 1_000;
+const DEFAULT_GOOGLE_CLOUD_TTS_LANGUAGE_CODE = "ja-JP";
+const DEFAULT_GOOGLE_CLOUD_TTS_VOICE = "ja-JP-Neural2-B";
+const DEFAULT_GOOGLE_CLOUD_TTS_AUDIO_ENCODING = "MP3";
 const PROVIDER_REQUEST_TIMEOUT_MS = 15_000;
 const ARTICLE_LIST_CACHE_TTL_MS = 10 * 60 * 1000;
 const ARTICLE_CONTENT_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -17,7 +28,12 @@ const LETTERS_PER_MINUTE = 500;
 const SUMMARY_MAX_LENGTH = 120;
 
 type BlogAudioApiOptions = {
-  openAiApiKey?: string;
+  googleApplicationCredentials?: string;
+  googleCloudProject?: string;
+  googleCloudTtsApiKey?: string;
+  googleCloudTtsLanguageCode?: string;
+  googleCloudTtsVoice?: string;
+  googleCloudTtsAudioEncoding?: string;
 };
 
 type ApiHandlerResult = "handled" | "next";
@@ -34,17 +50,6 @@ type TtsChunk = {
   text: string;
 };
 
-type ParsedWave = {
-  bytes: Uint8Array;
-  dataStart: number;
-  dataSize: number;
-  dataSizeOffset: number;
-  audioFormat: number;
-  channelCount: number;
-  sampleRate: number;
-  bitsPerSample: number;
-};
-
 type ProviderJsonCacheEntry = {
   cachedAt: number;
   value: unknown;
@@ -52,13 +57,29 @@ type ProviderJsonCacheEntry = {
 
 type TtsApiSuccessPayload = {
   audioBase64: string;
-  mimeType: "audio/wav";
+  mimeType: "audio/mpeg";
   durationSeconds: number | null;
-  source: "openai-tts";
+  source: "google-cloud-tts";
+};
+
+type GoogleCloudTtsSettings = {
+  applicationCredentialsPath: string | null;
+  apiKey: string | null;
+  projectId: string | null;
+  languageCode: string;
+  voiceName: string;
+  audioEncoding: "MP3";
+};
+
+type GoogleAccessToken = {
+  accessToken: string;
+  expiresAt: number;
+  userProject: string | null;
 };
 
 const providerJsonCache = new Map<string, ProviderJsonCacheEntry>();
 const ttsAudioCache = new Map<string, TtsApiSuccessPayload>();
+let googleAccessTokenCache: GoogleAccessToken | null = null;
 
 export function blogAudioApiPlugin(options: BlogAudioApiOptions) {
   return {
@@ -283,14 +304,7 @@ async function handleTtsRequest(
   response: any,
   options: BlogAudioApiOptions,
 ) {
-  if (!options.openAiApiKey) {
-    throw new ApiError(
-      501,
-      "tts_api_key_missing",
-      "OPENAI_API_KEY is required for real TTS generation",
-    );
-  }
-
+  const settings = getGoogleCloudTtsSettings(options);
   const payload = parseJsonRequestPayload(
     await readRequestText(request),
   ) as TtsRequestPayload;
@@ -304,7 +318,7 @@ async function handleTtsRequest(
     );
   }
 
-  const cacheKey = buildTtsCacheKey(payload, chunks);
+  const cacheKey = buildTtsCacheKey(payload, chunks, settings);
   const cachedPayload = ttsAudioCache.get(cacheKey);
 
   if (cachedPayload) {
@@ -313,27 +327,27 @@ async function handleTtsRequest(
   }
 
   const providerChunks = chunks.flatMap(splitTtsChunkForProviderLimit);
-  const waveFiles = await Promise.all(
+  const audioContents = await Promise.all(
     providerChunks.map((chunk) =>
-      generateOpenAiSpeech(chunk.text, options.openAiApiKey!),
+      generateGoogleCloudSpeech(chunk.text, settings),
     ),
   );
-  const combinedWave = concatenateWaveFiles(waveFiles);
   const responsePayload: TtsApiSuccessPayload = {
-    audioBase64: encodeBase64(combinedWave.bytes),
-    mimeType: "audio/wav",
-    durationSeconds:
-      combinedWave.durationSeconds ??
-      toFiniteNumber(payload.estimatedDurationSeconds),
-    source: "openai-tts",
+    audioBase64: combineBase64AudioContents(audioContents),
+    mimeType: "audio/mpeg",
+    durationSeconds: toFiniteNumber(payload.estimatedDurationSeconds),
+    source: "google-cloud-tts",
   };
 
   writeTtsAudioCache(cacheKey, responsePayload);
   sendJson(response, 200, responsePayload);
 }
 
-async function generateOpenAiSpeech(text: string, openAiApiKey: string) {
-  if (text.length > OPENAI_TTS_INPUT_LIMIT) {
+async function generateGoogleCloudSpeech(
+  text: string,
+  settings: GoogleCloudTtsSettings,
+) {
+  if (getUtf8ByteLength(text) > GOOGLE_TTS_INPUT_LIMIT_BYTES) {
     throw new ApiError(
       400,
       "tts_input_too_long",
@@ -341,25 +355,390 @@ async function generateOpenAiSpeech(text: string, openAiApiKey: string) {
     );
   }
 
-  const response = await fetchProvider(OPENAI_SPEECH_URL, {
+  const authHeaders = await getGoogleCloudAuthHeaders(settings);
+  const url = settings.apiKey
+    ? `${GOOGLE_TTS_SYNTHESIZE_URL}?key=${encodeURIComponent(settings.apiKey)}`
+    : GOOGLE_TTS_SYNTHESIZE_URL;
+  const response = await fetchProvider(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${openAiApiKey}`,
       "Content-Type": "application/json",
+      ...authHeaders,
     },
     body: JSON.stringify({
-      model: OPENAI_TTS_MODEL,
-      voice: OPENAI_TTS_VOICE,
-      input: text,
-      instructions: [
-        "Read this technical blog narration clearly in Japanese when the text is Japanese.",
-        "Keep code explanations concise and natural.",
-      ].join(" "),
-      response_format: "wav",
+      input: {
+        text,
+      },
+      voice: {
+        languageCode: settings.languageCode,
+        name: settings.voiceName,
+      },
+      audioConfig: {
+        audioEncoding: settings.audioEncoding,
+      },
     }),
   });
 
-  return new Uint8Array(await response.arrayBuffer());
+  const payload = (await response.json()) as unknown;
+
+  if (!isRecord(payload) || typeof payload.audioContent !== "string") {
+    throw new ApiError(
+      502,
+      "unsupported_response_shape",
+      "Google Cloud TTS response shape is not supported",
+    );
+  }
+
+  return payload.audioContent;
+}
+
+function getGoogleCloudTtsSettings(
+  options: BlogAudioApiOptions,
+): GoogleCloudTtsSettings {
+  const audioEncoding = (
+    toNonEmptyString(options.googleCloudTtsAudioEncoding) ??
+    DEFAULT_GOOGLE_CLOUD_TTS_AUDIO_ENCODING
+  ).toUpperCase();
+
+  if (audioEncoding !== "MP3") {
+    throw new ApiError(
+      500,
+      "tts_audio_encoding_unsupported",
+      "Only MP3 Google Cloud TTS audio is supported by the MVP player",
+    );
+  }
+
+  return {
+    applicationCredentialsPath:
+      toNonEmptyString(options.googleApplicationCredentials) ??
+      getDefaultApplicationCredentialsPath(),
+    apiKey: toNonEmptyString(options.googleCloudTtsApiKey),
+    projectId: toNonEmptyString(options.googleCloudProject),
+    languageCode:
+      toNonEmptyString(options.googleCloudTtsLanguageCode) ??
+      DEFAULT_GOOGLE_CLOUD_TTS_LANGUAGE_CODE,
+    voiceName:
+      toNonEmptyString(options.googleCloudTtsVoice) ??
+      DEFAULT_GOOGLE_CLOUD_TTS_VOICE,
+    audioEncoding,
+  };
+}
+
+async function getGoogleCloudAuthHeaders(settings: GoogleCloudTtsSettings) {
+  if (settings.apiKey) {
+    return {};
+  }
+
+  const token = await getGoogleCloudAccessToken(settings);
+  const userProject = settings.projectId ?? token.userProject;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token.accessToken}`,
+  };
+
+  if (userProject) {
+    headers["x-goog-user-project"] = userProject;
+  }
+
+  return headers;
+}
+
+async function getGoogleCloudAccessToken(settings: GoogleCloudTtsSettings) {
+  if (
+    googleAccessTokenCache &&
+    googleAccessTokenCache.expiresAt - Date.now() > 60_000
+  ) {
+    return googleAccessTokenCache;
+  }
+
+  const credentials = settings.applicationCredentialsPath
+    ? await readGoogleCredentials(settings.applicationCredentialsPath)
+    : null;
+  const token =
+    credentials !== null
+      ? await exchangeGoogleCredentialsForAccessToken(credentials)
+      : await fetchGoogleMetadataAccessToken(settings);
+
+  googleAccessTokenCache = token;
+  return token;
+}
+
+async function readGoogleCredentials(path: string) {
+  const text = await readUtf8File(path);
+
+  if (text === null) {
+    return null;
+  }
+
+  const payload = parseJsonRequestPayload(text);
+
+  if (!isRecord(payload) || typeof payload.type !== "string") {
+    throw new ApiError(
+      500,
+      "tts_credential_unsupported",
+      "Google Cloud credential file shape is not supported",
+    );
+  }
+
+  return payload;
+}
+
+async function exchangeGoogleCredentialsForAccessToken(
+  credentials: Record<string, unknown>,
+) {
+  if (credentials.type === "authorized_user") {
+    return refreshAuthorizedUserCredentials(credentials);
+  }
+
+  if (credentials.type === "service_account") {
+    return exchangeServiceAccountCredentials(credentials);
+  }
+
+  throw new ApiError(
+    500,
+    "tts_credential_unsupported",
+    "Google Cloud credential type is not supported",
+  );
+}
+
+async function refreshAuthorizedUserCredentials(
+  credentials: Record<string, unknown>,
+) {
+  const clientId = toNonEmptyString(credentials.client_id);
+  const clientSecret = toNonEmptyString(credentials.client_secret);
+  const refreshToken = toNonEmptyString(credentials.refresh_token);
+  const tokenUri =
+    toNonEmptyString(credentials.token_uri) ?? GOOGLE_OAUTH_TOKEN_URL;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new ApiError(
+      500,
+      "tts_credential_unsupported",
+      "Google Cloud authorized user credential is incomplete",
+    );
+  }
+
+  const payload = await fetchGoogleTokenPayload(tokenUri, {
+    grant_type: "refresh_token",
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+  });
+
+  return toGoogleAccessToken(
+    payload,
+    toNonEmptyString(credentials.quota_project_id),
+  );
+}
+
+async function exchangeServiceAccountCredentials(
+  credentials: Record<string, unknown>,
+) {
+  const clientEmail = toNonEmptyString(credentials.client_email);
+  const privateKey = toNonEmptyString(credentials.private_key);
+  const tokenUri =
+    toNonEmptyString(credentials.token_uri) ?? GOOGLE_OAUTH_TOKEN_URL;
+
+  if (!clientEmail || !privateKey) {
+    throw new ApiError(
+      500,
+      "tts_credential_unsupported",
+      "Google Cloud service account credential is incomplete",
+    );
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const assertion = await signServiceAccountJwt({
+    clientEmail,
+    privateKey,
+    tokenUri,
+    issuedAt: nowSeconds,
+    expiresAt: nowSeconds + 3600,
+  });
+  const payload = await fetchGoogleTokenPayload(tokenUri, {
+    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    assertion,
+  });
+
+  return toGoogleAccessToken(payload, null);
+}
+
+async function fetchGoogleTokenPayload(
+  tokenUri: string,
+  params: Record<string, string>,
+) {
+  const response = await fetchProvider(tokenUri, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams(params).toString(),
+  });
+
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    throw new ApiError(
+      502,
+      "unsupported_response_shape",
+      "Google Cloud auth response was not valid JSON",
+    );
+  }
+}
+
+async function fetchGoogleMetadataAccessToken(
+  settings: GoogleCloudTtsSettings,
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, GOOGLE_METADATA_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(GOOGLE_METADATA_TOKEN_URL, {
+      headers: {
+        "Metadata-Flavor": "Google",
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw await toProviderApiError(response);
+    }
+
+    return toGoogleAccessToken(
+      (await response.json()) as unknown,
+      settings.projectId,
+    );
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    throw new ApiError(
+      501,
+      "tts_credential_missing",
+      "Google Cloud credentials are required for real TTS generation",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function toGoogleAccessToken(
+  payload: unknown,
+  userProject: string | null,
+): GoogleAccessToken {
+  if (!isRecord(payload) || typeof payload.access_token !== "string") {
+    throw new ApiError(
+      502,
+      "unsupported_response_shape",
+      "Google Cloud auth response shape is not supported",
+    );
+  }
+
+  const expiresIn = toFiniteNumber(payload.expires_in) ?? 3600;
+
+  return {
+    accessToken: payload.access_token,
+    expiresAt: Date.now() + expiresIn * 1000,
+    userProject,
+  };
+}
+
+async function signServiceAccountJwt({
+  clientEmail,
+  privateKey,
+  tokenUri,
+  issuedAt,
+  expiresAt,
+}: {
+  clientEmail: string;
+  privateKey: string;
+  tokenUri: string;
+  issuedAt: number;
+  expiresAt: number;
+}) {
+  if (!globalThis.crypto?.subtle) {
+    throw new ApiError(
+      500,
+      "tts_credential_unsupported",
+      "Web Crypto is required to sign Google Cloud service account credentials",
+    );
+  }
+
+  const encodedHeader = base64UrlEncodeText(
+    JSON.stringify({
+      alg: "RS256",
+      typ: "JWT",
+    }),
+  );
+  const encodedPayload = base64UrlEncodeText(
+    JSON.stringify({
+      iss: clientEmail,
+      scope: GOOGLE_AUTH_SCOPE,
+      aud: tokenUri,
+      iat: issuedAt,
+      exp: expiresAt,
+    }),
+  );
+  const unsignedJwt = `${encodedHeader}.${encodedPayload}`;
+  const key = await globalThis.crypto.subtle.importKey(
+    "pkcs8",
+    decodePemPrivateKey(privateKey),
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256",
+    },
+    false,
+    ["sign"],
+  );
+  const signature = await globalThis.crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(unsignedJwt),
+  );
+
+  return `${unsignedJwt}.${base64UrlEncodeBytes(new Uint8Array(signature))}`;
+}
+
+function decodePemPrivateKey(privateKey: string) {
+  return decodeBase64(
+    privateKey
+      .replace("-----BEGIN PRIVATE KEY-----", "")
+      .replace("-----END PRIVATE KEY-----", "")
+      .replace(/\s/g, ""),
+  );
+}
+
+async function readUtf8File(path: string) {
+  const fs = (await new Function(
+    "specifier",
+    "return import(specifier)",
+  )("node:fs/promises")) as {
+    readFile: (path: string, encoding: "utf8") => Promise<string>;
+  };
+
+  try {
+    return await fs.readFile(path, "utf8");
+  } catch (error) {
+    if (isRecord(error) && error.code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function getDefaultApplicationCredentialsPath() {
+  const homeDirectory =
+    toNonEmptyString(process.env.HOME) ?? toNonEmptyString(process.env.USERPROFILE);
+
+  if (!homeDirectory) {
+    return null;
+  }
+
+  return `${homeDirectory}/.config/gcloud/application_default_credentials.json`;
 }
 
 async function fetchCachedProviderJson({
@@ -429,7 +808,7 @@ async function fetchProvider(
     });
 
     if (!response.ok) {
-      throw toProviderApiError(response);
+      throw await toProviderApiError(response);
     }
 
     return response;
@@ -456,14 +835,19 @@ async function fetchProvider(
   }
 }
 
-function toProviderApiError(response: Response) {
+async function toProviderApiError(response: Response) {
   const retryAfterSeconds = getRetryAfterSeconds(response);
+  const providerMessage = await getProviderErrorMessage(response);
 
   if (response.status === 429) {
     return new ApiError(
       429,
       "rate_limited",
-      "Provider rate limit reached",
+      formatProviderErrorMessage(
+        "Provider rate limit reached",
+        response,
+        providerMessage,
+      ),
       retryAfterSeconds,
     );
   }
@@ -472,7 +856,24 @@ function toProviderApiError(response: Response) {
     return new ApiError(
       504,
       "provider_timeout",
-      "Provider request timed out",
+      formatProviderErrorMessage(
+        "Provider request timed out",
+        response,
+        providerMessage,
+      ),
+      retryAfterSeconds,
+    );
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    return new ApiError(
+      502,
+      "provider_auth_failed",
+      formatProviderErrorMessage(
+        "Provider authentication or permission failed",
+        response,
+        providerMessage,
+      ),
       retryAfterSeconds,
     );
   }
@@ -480,137 +881,66 @@ function toProviderApiError(response: Response) {
   return new ApiError(
     502,
     "provider_request_failed",
-    `Provider request failed: ${response.status}`,
+    formatProviderErrorMessage(
+      "Provider request failed",
+      response,
+      providerMessage,
+    ),
     retryAfterSeconds,
   );
 }
 
-function concatenateWaveFiles(waveFiles: Uint8Array[]) {
-  const parsedWaves = waveFiles.map(parseWaveFile);
-  const firstWave = parsedWaves[0];
+async function getProviderErrorMessage(response: Response) {
+  const contentType = response.headers.get("Content-Type") ?? "";
 
-  if (!firstWave) {
-    throw new ApiError(500, "tts_audio_empty", "TTS provider returned no audio");
-  }
+  try {
+    if (contentType.includes("application/json")) {
+      const payload = (await response.clone().json()) as unknown;
+      const message = getProviderJsonErrorMessage(payload);
 
-  parsedWaves.forEach((wave) => {
-    if (!isCompatibleWave(firstWave, wave)) {
-      throw new ApiError(
-        502,
-        "tts_audio_incompatible",
-        "TTS provider returned incompatible audio chunks",
-      );
+      if (message) {
+        return message;
+      }
     }
-  });
 
-  const totalDataSize = parsedWaves.reduce(
-    (size, wave) => size + wave.dataSize,
-    0,
-  );
-  const output = new Uint8Array(firstWave.dataStart + totalDataSize);
-  output.set(firstWave.bytes.slice(0, firstWave.dataStart), 0);
-
-  let writeOffset = firstWave.dataStart;
-
-  parsedWaves.forEach((wave) => {
-    output.set(
-      wave.bytes.slice(wave.dataStart, wave.dataStart + wave.dataSize),
-      writeOffset,
-    );
-    writeOffset += wave.dataSize;
-  });
-
-  const view = new DataView(output.buffer);
-  view.setUint32(4, output.length - 8, true);
-  view.setUint32(firstWave.dataSizeOffset, totalDataSize, true);
-
-  return {
-    bytes: output,
-    durationSeconds:
-      totalDataSize /
-      (firstWave.sampleRate *
-        firstWave.channelCount *
-        (firstWave.bitsPerSample / 8)),
-  };
+    const text = (await response.clone().text()).trim();
+    return text || null;
+  } catch {
+    return null;
+  }
 }
 
-function parseWaveFile(bytes: Uint8Array): ParsedWave {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-
-  if (readAscii(bytes, 0, 4) !== "RIFF" || readAscii(bytes, 8, 4) !== "WAVE") {
-    throw new ApiError(
-      502,
-      "tts_audio_unsupported",
-      "TTS provider did not return a WAV file",
-    );
+function getProviderJsonErrorMessage(payload: unknown) {
+  if (!isRecord(payload)) {
+    return null;
   }
 
-  let offset = 12;
-  let audioFormat: number | null = null;
-  let channelCount: number | null = null;
-  let sampleRate: number | null = null;
-  let bitsPerSample: number | null = null;
-  let dataStart: number | null = null;
-  let dataSize: number | null = null;
-  let dataSizeOffset: number | null = null;
+  const error = isRecord(payload.error) ? payload.error : null;
+  const errorMessage = error ? toNonEmptyString(error.message) : null;
 
-  while (offset + 8 <= bytes.length) {
-    const chunkId = readAscii(bytes, offset, 4);
-    const chunkSize = view.getUint32(offset + 4, true);
-    const chunkDataStart = offset + 8;
-
-    if (chunkId === "fmt ") {
-      audioFormat = view.getUint16(chunkDataStart, true);
-      channelCount = view.getUint16(chunkDataStart + 2, true);
-      sampleRate = view.getUint32(chunkDataStart + 4, true);
-      bitsPerSample = view.getUint16(chunkDataStart + 14, true);
-    }
-
-    if (chunkId === "data") {
-      dataStart = chunkDataStart;
-      dataSize = chunkSize;
-      dataSizeOffset = offset + 4;
-      break;
-    }
-
-    offset = chunkDataStart + chunkSize + (chunkSize % 2);
+  if (errorMessage) {
+    return errorMessage;
   }
 
-  if (
-    audioFormat === null ||
-    channelCount === null ||
-    sampleRate === null ||
-    bitsPerSample === null ||
-    dataStart === null ||
-    dataSize === null ||
-    dataSizeOffset === null
-  ) {
-    throw new ApiError(
-      502,
-      "tts_audio_unsupported",
-      "TTS provider returned unsupported WAV data",
-    );
-  }
-
-  return {
-    bytes,
-    dataStart,
-    dataSize,
-    dataSizeOffset,
-    audioFormat,
-    channelCount,
-    sampleRate,
-    bitsPerSample,
-  };
+  return toNonEmptyString(payload.message);
 }
 
-function isCompatibleWave(first: ParsedWave, next: ParsedWave) {
-  return (
-    first.audioFormat === next.audioFormat &&
-    first.channelCount === next.channelCount &&
-    first.sampleRate === next.sampleRate &&
-    first.bitsPerSample === next.bitsPerSample
-  );
+function formatProviderErrorMessage(
+  prefix: string,
+  response: Response,
+  providerMessage: string | null,
+) {
+  if (!providerMessage) {
+    return `${prefix}: ${response.status}`;
+  }
+
+  const normalizedMessage = providerMessage.replace(/\s+/g, " ").trim();
+  const truncatedMessage =
+    normalizedMessage.length > 240
+      ? `${normalizedMessage.slice(0, 237).trim()}...`
+      : normalizedMessage;
+
+  return `${prefix}: ${response.status}. ${truncatedMessage}`;
 }
 
 function toTtsChunks(chunks: unknown): TtsChunk[] {
@@ -639,11 +969,11 @@ function toTtsChunks(chunks: unknown): TtsChunk[] {
 }
 
 function splitTtsChunkForProviderLimit(chunk: TtsChunk): TtsChunk[] {
-  if (chunk.text.length <= OPENAI_TTS_INPUT_LIMIT) {
+  if (getUtf8ByteLength(chunk.text) <= GOOGLE_TTS_INPUT_LIMIT_BYTES) {
     return [chunk];
   }
 
-  return splitTextForProviderLimit(chunk.text, OPENAI_TTS_INPUT_LIMIT).map(
+  return splitTextForProviderLimit(chunk.text, GOOGLE_TTS_INPUT_LIMIT_BYTES).map(
     (text, index) => ({
       ...chunk,
       id: `${chunk.id}:part:${index + 1}`,
@@ -653,33 +983,33 @@ function splitTtsChunkForProviderLimit(chunk: TtsChunk): TtsChunk[] {
   );
 }
 
-function splitTextForProviderLimit(text: string, maxCharacters: number) {
+function splitTextForProviderLimit(text: string, maxBytes: number) {
   const sentences = text
     .match(/[^。！？.!?]+[。！？.!?]?/g)
     ?.map((sentence) => sentence.trim())
     .filter(Boolean);
 
   if (!sentences?.length) {
-    return splitLongTextForProviderLimit(text, maxCharacters);
+    return splitLongTextForProviderLimit(text, maxBytes);
   }
 
   const parts: string[] = [];
   let current = "";
 
   sentences.forEach((sentence) => {
-    if (sentence.length > maxCharacters) {
+    if (getUtf8ByteLength(sentence) > maxBytes) {
       if (current) {
         parts.push(current);
         current = "";
       }
 
-      parts.push(...splitLongTextForProviderLimit(sentence, maxCharacters));
+      parts.push(...splitLongTextForProviderLimit(sentence, maxBytes));
       return;
     }
 
     const candidate = current ? `${current} ${sentence}` : sentence;
 
-    if (candidate.length > maxCharacters && current) {
+    if (getUtf8ByteLength(candidate) > maxBytes && current) {
       parts.push(current);
       current = sentence;
       return;
@@ -695,23 +1025,39 @@ function splitTextForProviderLimit(text: string, maxCharacters: number) {
   return parts;
 }
 
-function splitLongTextForProviderLimit(text: string, maxCharacters: number) {
+function splitLongTextForProviderLimit(text: string, maxBytes: number) {
   const parts: string[] = [];
-  let index = 0;
+  let current = "";
 
-  while (index < text.length) {
-    parts.push(text.slice(index, index + maxCharacters));
-    index += maxCharacters;
+  for (const character of text) {
+    const candidate = `${current}${character}`;
+
+    if (current && getUtf8ByteLength(candidate) > maxBytes) {
+      parts.push(current);
+      current = character;
+      continue;
+    }
+
+    current = candidate;
+  }
+
+  if (current) {
+    parts.push(current);
   }
 
   return parts;
 }
 
-function buildTtsCacheKey(payload: TtsRequestPayload, chunks: TtsChunk[]) {
+function buildTtsCacheKey(
+  payload: TtsRequestPayload,
+  chunks: TtsChunk[],
+  settings: GoogleCloudTtsSettings,
+) {
   return JSON.stringify({
-    provider: "openai",
-    model: OPENAI_TTS_MODEL,
-    voice: OPENAI_TTS_VOICE,
+    provider: "google-cloud-tts",
+    languageCode: settings.languageCode,
+    voice: settings.voiceName,
+    audioEncoding: settings.audioEncoding,
     narrationVersion: toNonEmptyString(payload.narrationVersion),
     chunks: chunks.map((chunk) => ({
       id: chunk.id,
@@ -1027,14 +1373,25 @@ function getRetryAfterSeconds(response: Response) {
   return Math.max(0, Math.ceil((retryAfterDate - Date.now()) / 1000));
 }
 
-function readAscii(bytes: Uint8Array, offset: number, length: number) {
-  let value = "";
-
-  for (let index = 0; index < length; index += 1) {
-    value += String.fromCharCode(bytes[offset + index] ?? 0);
+function combineBase64AudioContents(audioContents: string[]) {
+  if (audioContents.length === 1) {
+    return audioContents[0] ?? "";
   }
 
-  return value;
+  return encodeBase64(concatenateByteArrays(audioContents.map(decodeBase64)));
+}
+
+function concatenateByteArrays(arrays: Uint8Array[]) {
+  const totalLength = arrays.reduce((length, bytes) => length + bytes.length, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+
+  arrays.forEach((bytes) => {
+    output.set(bytes, offset);
+    offset += bytes.length;
+  });
+
+  return output;
 }
 
 function encodeBase64(bytes: Uint8Array) {
@@ -1055,6 +1412,69 @@ function encodeBase64(bytes: Uint8Array) {
   }
 
   return output;
+}
+
+function decodeBase64(base64: string) {
+  const normalized = base64.replace(/\s/g, "");
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const bytes: number[] = [];
+
+  for (let index = 0; index < normalized.length; index += 4) {
+    const thirdCharacter = normalized[index + 2] ?? "";
+    const fourthCharacter = normalized[index + 3] ?? "";
+    const first = alphabet.indexOf(normalized[index] ?? "");
+    const second = alphabet.indexOf(normalized[index + 1] ?? "");
+    const third =
+      thirdCharacter === "=" ? -1 : alphabet.indexOf(thirdCharacter);
+    const fourth =
+      fourthCharacter === "=" ? -1 : alphabet.indexOf(fourthCharacter);
+
+    if (
+      first < 0 ||
+      second < 0 ||
+      (thirdCharacter !== "=" && third < 0) ||
+      (fourthCharacter !== "=" && fourth < 0)
+    ) {
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Provider returned invalid base64 audio",
+      );
+    }
+
+    const triplet =
+      (first << 18) |
+      (second << 12) |
+      ((third < 0 ? 0 : third) << 6) |
+      (fourth < 0 ? 0 : fourth);
+    bytes.push((triplet >> 16) & 255);
+
+    if (third >= 0) {
+      bytes.push((triplet >> 8) & 255);
+    }
+
+    if (fourth >= 0) {
+      bytes.push(triplet & 255);
+    }
+  }
+
+  return new Uint8Array(bytes);
+}
+
+function base64UrlEncodeText(text: string) {
+  return base64UrlEncodeBytes(new TextEncoder().encode(text));
+}
+
+function base64UrlEncodeBytes(bytes: Uint8Array) {
+  return encodeBase64(bytes)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function getUtf8ByteLength(text: string) {
+  return new TextEncoder().encode(text).length;
 }
 
 function toNonEmptyString(value: unknown) {

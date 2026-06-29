@@ -53,6 +53,7 @@ GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_TTS_LANGUAGE_CODE=ja-JP
 GOOGLE_CLOUD_TTS_VOICE=ja-JP-Neural2-B
 GOOGLE_CLOUD_TTS_AUDIO_ENCODING=MP3
+GOOGLE_CLOUD_TTS_API_KEY=
 ```
 
 ## TTS 方針
@@ -78,6 +79,6 @@ GOOGLE_CLOUD_TTS_AUDIO_ENCODING=MP3
 ## Limitations
 
 - Vite middleware は MVP 用の local implementation であり、本番運用では同じ contract の server / edge 実装が必要。
-- 現行の OpenAI Speech API adapter は、後続の Google Cloud Text-to-Speech adapter 実装タスクで置き換える。
+- 現行の `/api/tts` adapter は Google Cloud Text-to-Speech の MP3 生成に対応している。
 - 生成済み音声の永続 cache と容量管理は [20-persistent-audio-track-cache.md](./tasks/20-persistent-audio-track-cache.md) の範囲。
 - PWA / background / lock screen の挙動確認は [21-pwa-mobile-device-playback-validation.md](./tasks/21-pwa-mobile-device-playback-validation.md) の範囲。

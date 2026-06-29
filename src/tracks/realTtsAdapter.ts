@@ -54,7 +54,7 @@ export async function generateRealTtsAudioResource(
       Number.isFinite(payload.durationSeconds)
         ? payload.durationSeconds
         : script.estimatedDurationSeconds,
-    source: "openai-tts",
+    source: "google-cloud-tts",
   };
 }
 

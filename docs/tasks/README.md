@@ -28,6 +28,7 @@
 - [17-real-tts-audio-generation.md](./17-real-tts-audio-generation.md): 実 TTS 音声生成
 - [18-production-api-boundary.md](./18-production-api-boundary.md): 本番用 API 境界
 - [22-google-cloud-text-to-speech-setup.md](./22-google-cloud-text-to-speech-setup.md): Google Cloud Text-to-Speech 利用準備と認証設定
+- [23-google-cloud-tts-provider-switch.md](./23-google-cloud-tts-provider-switch.md): Google Cloud Text-to-Speech への TTS provider 切り替え
 
 ## 未実装
 

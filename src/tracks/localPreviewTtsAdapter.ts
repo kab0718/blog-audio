@@ -4,7 +4,7 @@ import type { NarrationScript } from "../types/narration";
 export type GeneratedAudioResource = {
   playbackResource: PlaybackResource;
   durationSeconds: number;
-  source: "local-preview" | "openai-tts";
+  source: "local-preview" | "google-cloud-tts";
 };
 
 const SAMPLE_RATE = 8_000;
