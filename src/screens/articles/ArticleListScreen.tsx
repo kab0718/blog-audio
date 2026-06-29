@@ -1,9 +1,12 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useArticleLibrary } from "../../app/articles/ArticleLibraryContext";
 import { usePlayback } from "../../app/playback/PlaybackContext";
 import { useAudioTracks } from "../../app/tracks/AudioTrackContext";
 import { toArticleListItemViewModel } from "../../view-models/library";
 import styles from "./ArticleListScreen.module.css";
+
+const ARTICLES_PER_PAGE = 8;
 
 export function ArticleListScreen() {
   const { articles, errorMessage, retry, status } = useArticleLibrary();
@@ -13,23 +16,45 @@ export function ArticleListScreen() {
     playArticleNow,
   } = usePlayback();
   const { getTrackByArticleId } = useAudioTracks();
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(articles.length / ARTICLES_PER_PAGE));
+  const visibleArticles = useMemo(() => {
+    const startIndex = (currentPage - 1) * ARTICLES_PER_PAGE;
+
+    return articles.slice(startIndex, startIndex + ARTICLES_PER_PAGE);
+  }, [articles, currentPage]);
+  const pageStartIndex =
+    articles.length > 0 ? (currentPage - 1) * ARTICLES_PER_PAGE + 1 : 0;
+  const pageEndIndex = Math.min(
+    currentPage * ARTICLES_PER_PAGE,
+    articles.length,
+  );
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(1, page), totalPages));
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
 
   return (
     <section className={styles.screen}>
       <div className={styles.intro}>
-        <p className={styles.kicker}>Browse</p>
+        <p className={styles.kicker}>記事一覧</p>
         <p className={styles.copy}>
-          技術記事をトラック単位で並べ、再生画面とキュー管理へ自然に繋げる。
+          聴きたい記事を選んで、すぐ再生するかキューに追加できます。
         </p>
       </div>
 
       <div className={styles.metrics}>
         <div>
-          <span className={styles.metricLabel}>Articles</span>
+          <span className={styles.metricLabel}>記事数</span>
           <strong className={styles.metricValue}>{articles.length}</strong>
         </div>
         <div>
-          <span className={styles.metricLabel}>Queued</span>
+          <span className={styles.metricLabel}>キュー</span>
           <strong className={styles.metricValue}>{queueItemIds.length}</strong>
         </div>
       </div>
@@ -38,7 +63,7 @@ export function ArticleListScreen() {
         <div className={styles.stateCard}>
           <p className={styles.stateTitle}>記事一覧を取得中</p>
           <p className={styles.stateCopy}>
-            記事メタ情報を読み込み、共通 Article 形式へ正規化しています。
+            最新の記事情報を読み込んでいます。
           </p>
         </div>
       ) : null}
@@ -68,75 +93,121 @@ export function ArticleListScreen() {
       ) : null}
 
       {status === "success" ? (
-        <ul className={styles.list}>
-          {articles.map((article, index) => {
-            const isQueued = queueItemIds.includes(article.id);
-            const viewModel = toArticleListItemViewModel(
-              article,
-              getTrackByArticleId(article.id),
-              {
-                index,
-                isCurrent: article.id === currentQueueItemId,
-                isQueued,
-              },
-            );
+        <>
+          <div className={styles.paginationSummary}>
+            <span>
+              {pageStartIndex}-{pageEndIndex} / {articles.length} 件
+            </span>
+            <span>
+              ページ {currentPage} / {totalPages}
+            </span>
+          </div>
 
-            return (
-              <li key={viewModel.id} className={styles.item}>
-                <div className={styles.trackIndex}>{viewModel.indexLabel}</div>
-                <div className={styles.trackBody}>
-                  <div className={styles.metaRow}>
-                    <span>{viewModel.sourceLabel}</span>
-                    <span>{viewModel.author}</span>
-                    <span>{viewModel.durationLabel}</span>
-                    <span
-                      className={`${styles.statusBadge} ${styles[`statusBadge${capitalizeStatus(viewModel.trackStatusTone)}`]}`}
-                    >
-                      {viewModel.trackStatusLabel}
-                    </span>
+          <ul className={styles.list}>
+            {visibleArticles.map((article, index) => {
+              const articleIndex =
+                (currentPage - 1) * ARTICLES_PER_PAGE + index;
+              const isQueued = queueItemIds.includes(article.id);
+              const viewModel = toArticleListItemViewModel(
+                article,
+                getTrackByArticleId(article.id),
+                {
+                  index: articleIndex,
+                  isCurrent: article.id === currentQueueItemId,
+                  isQueued,
+                },
+              );
+
+              return (
+                <li
+                  key={viewModel.id}
+                  className={
+                    viewModel.isCurrent
+                      ? `${styles.item} ${styles.itemCurrent}`
+                      : styles.item
+                  }
+                >
+                  <div className={styles.trackIndex}>
+                    {viewModel.indexLabel}
                   </div>
-                  <h2 className={styles.title}>{viewModel.title}</h2>
-                  {viewModel.summary ? (
-                    <p className={styles.summary}>{viewModel.summary}</p>
-                  ) : null}
-                  <div className={styles.footerRow}>
-                    {viewModel.tags.length > 0 ? (
-                      <div className={styles.tags}>
-                        {viewModel.tags.map((tag) => (
-                          <span key={tag} className={styles.tag}>
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className={styles.actions}>
-                      <span className={styles.queueStatus}>
-                        {viewModel.queueStatusLabel}
+                  <div className={styles.trackBody}>
+                    <div className={styles.metaRow}>
+                      <span>{viewModel.sourceLabel}</span>
+                      <span>{viewModel.author}</span>
+                      <span>{viewModel.durationLabel}</span>
+                      <span
+                        className={`${styles.statusBadge} ${styles[`statusBadge${capitalizeStatus(viewModel.trackStatusTone)}`]}`}
+                      >
+                        {viewModel.trackStatusLabel}
                       </span>
-                      <button
-                        type="button"
-                        className={styles.secondaryAction}
-                        disabled={viewModel.isQueued}
-                        onClick={() => addArticleToQueue(viewModel.id)}
-                      >
-                        {viewModel.isQueued ? "追加済み" : "キューに追加"}
-                      </button>
-                      <Link
-                        className={styles.actionLink}
-                        to="/player"
-                        onClick={() => {
-                          playArticleNow(viewModel.id);
-                        }}
-                      >
-                        {viewModel.isCurrent ? "再生画面へ" : "今すぐ再生"}
-                      </Link>
+                    </div>
+                    <h2 className={styles.title}>{viewModel.title}</h2>
+                    {viewModel.summary ? (
+                      <p className={styles.summary}>{viewModel.summary}</p>
+                    ) : null}
+                    <div className={styles.footerRow}>
+                      {viewModel.tags.length > 0 ? (
+                        <div className={styles.tags}>
+                          {viewModel.tags.map((tag) => (
+                            <span key={tag} className={styles.tag}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className={styles.actions}>
+                        <span className={styles.queueStatus}>
+                          {viewModel.queueStatusLabel}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.secondaryAction}
+                          disabled={viewModel.isQueued}
+                          onClick={() => addArticleToQueue(viewModel.id)}
+                        >
+                          {viewModel.isQueued ? "追加済み" : "キューに追加"}
+                        </button>
+                        <Link
+                          className={styles.actionLink}
+                          to="/player"
+                          onClick={() => {
+                            playArticleNow(viewModel.id);
+                          }}
+                        >
+                          {viewModel.isCurrent ? "再生画面へ" : "今すぐ再生"}
+                        </Link>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+
+          {totalPages > 1 ? (
+            <nav className={styles.pagination} aria-label="記事一覧ページ">
+              <button
+                type="button"
+                className={styles.pageButton}
+                disabled={currentPage === 1}
+                onClick={() => goToPage(currentPage - 1)}
+              >
+                前へ
+              </button>
+              <span className={styles.pageStatus}>
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className={styles.pageButton}
+                disabled={currentPage === totalPages}
+                onClick={() => goToPage(currentPage + 1)}
+              >
+                次へ
+              </button>
+            </nav>
+          ) : null}
+        </>
       ) : null}
     </section>
   );

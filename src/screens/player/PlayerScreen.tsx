@@ -105,12 +105,12 @@ export function PlayerScreen() {
     return (
       <section className={styles.screen}>
         <div className={styles.hero}>
-          <p className={styles.kicker}>Player</p>
+          <p className={styles.kicker}>再生中</p>
           <h2 className={styles.title}>再生対象なし</h2>
           <p className={styles.meta}>{getEmptyPlayerCopy(status)}</p>
         </div>
         <div className={styles.emptyState}>
-          記事一覧の取得後、記事を選ぶとここに再生対象が表示されます。
+          記事一覧から記事を選ぶと、ここに再生トラックが表示されます。
         </div>
       </section>
     );
@@ -219,7 +219,7 @@ export function PlayerScreen() {
       ) : null}
 
       <div className={styles.hero}>
-        <p className={styles.kicker}>Player</p>
+        <p className={styles.kicker}>再生中</p>
         <h2 className={styles.title}>{viewModel.title}</h2>
         <p className={styles.meta}>{viewModel.metaLine}</p>
       </div>
@@ -234,13 +234,13 @@ export function PlayerScreen() {
 
       <div className={styles.readout}>
         <div>
-          <span className={styles.label}>Audio track</span>
+          <span className={styles.label}>音声トラック</span>
           <p className={styles.value}>
             {viewModel.audioTrackLabel} / {viewModel.audioTrackCopy}
           </p>
         </div>
         <div>
-          <span className={styles.label}>Playback state</span>
+          <span className={styles.label}>再生状態</span>
           <p className={styles.value}>
             {viewModel.playerStatusLabel} / {viewModel.playbackResourceCopy}
           </p>
@@ -280,7 +280,7 @@ export function PlayerScreen() {
           disabled={!previousQueueItemId}
           onClick={() => moveToQueueItem(previousQueueItemId)}
         >
-          Prev
+          前へ
         </button>
         <button
           type="button"
@@ -296,14 +296,14 @@ export function PlayerScreen() {
           disabled={!nextQueueItemId}
           onClick={() => next({ autoplay: playerStatus === "playing" })}
         >
-          Next
+          次へ
         </button>
       </div>
 
       <div className={styles.settingsPanel}>
         <div className={styles.settingGroup}>
           <div className={styles.settingHeader}>
-            <span className={styles.label}>Speed</span>
+            <span className={styles.label}>再生速度</span>
             <strong>{formatPlaybackRateLabel(playbackRate)}</strong>
           </div>
           <div className={styles.segmentedControl}>

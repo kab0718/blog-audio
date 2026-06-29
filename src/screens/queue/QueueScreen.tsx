@@ -26,7 +26,7 @@ export function QueueScreen() {
     <section className={styles.screen}>
       <div className={styles.intro}>
         <div className={styles.introHeader}>
-          <p className={styles.kicker}>Queue</p>
+          <p className={styles.kicker}>再生キュー</p>
           <button
             type="button"
             className={styles.clearButton}
@@ -37,7 +37,7 @@ export function QueueScreen() {
           </button>
         </div>
         <p className={styles.copy}>
-          次に聴く記事を並べ替え、不要な待機記事を外せます。
+          連続再生する記事の順番を確認し、聴かない記事を外せます。
         </p>
       </div>
 
@@ -45,14 +45,14 @@ export function QueueScreen() {
         <div className={styles.emptyState}>{getEmptyQueueCopy(status)}</div>
       ) : nextQueueItemId ? (
         <div className={styles.nextUp}>
-          <span className={styles.nextUpLabel}>Next up</span>
+          <span className={styles.nextUpLabel}>次に再生</span>
           <strong>
             {getArticleById(nextQueueItemId)?.title ?? "記事を確認中"}
           </strong>
         </div>
       ) : (
         <div className={styles.nextUp}>
-          <span className={styles.nextUpLabel}>Next up</span>
+          <span className={styles.nextUpLabel}>次に再生</span>
           <strong>次の記事はありません</strong>
         </div>
       )}
@@ -146,8 +146,8 @@ function getEmptyQueueCopy(status: string) {
 
 function getQueueBadgeLabel(isCurrent: boolean, isNext: boolean) {
   if (isCurrent) {
-    return "Now";
+    return "再生中";
   }
 
-  return isNext ? "Next" : "Queued";
+  return isNext ? "次" : "待機";
 }

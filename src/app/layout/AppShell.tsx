@@ -6,23 +6,29 @@ import { toMiniPlayerViewModel } from "../../view-models/library";
 import styles from "./AppShell.module.css";
 
 const navItems = [
-  { to: "/", label: "Articles", caption: "記事一覧" },
-  { to: "/player", label: "Player", caption: "プレーヤー" },
-  { to: "/queue", label: "Queue", caption: "キュー" },
+  { to: "/", label: "探す", caption: "Library" },
+  { to: "/player", label: "聴く", caption: "Player" },
+  { to: "/queue", label: "並べる", caption: "Queue" },
 ];
 
-const routeLabels: Record<string, { eyebrow: string; title: string }> = {
+const routeLabels: Record<
+  string,
+  { eyebrow: string; title: string; subtitle: string }
+> = {
   "/": {
-    eyebrow: "Library",
-    title: "聴く記事を選ぶ",
+    eyebrow: "記事を探す",
+    title: "技術記事を聴く",
+    subtitle: "Zenn / Qiita の記事を選び、1本の音声トラックとして再生します。",
   },
   "/player": {
-    eyebrow: "Now Playing",
-    title: "再生画面の骨格",
+    eyebrow: "再生中",
+    title: "いま聴いている記事",
+    subtitle: "本文は自然に、コードブロックは要約して聴ける形に整えます。",
   },
   "/queue": {
-    eyebrow: "Up Next",
-    title: "連続再生の流れを確認",
+    eyebrow: "再生キュー",
+    title: "次に流す記事",
+    subtitle: "再生順を確認し、聴きたい記事だけをキューに残します。",
   },
 };
 
@@ -51,7 +57,7 @@ export function AppShell() {
             <h1 className={styles.title}>{currentRoute.title}</h1>
           </div>
           <p className={styles.subtitle}>
-            1 article = 1 track の体験をモバイル幅で先に固める。
+            {currentRoute.subtitle}
           </p>
         </header>
 
@@ -61,8 +67,8 @@ export function AppShell() {
       </div>
 
       <div className={styles.footerStack}>
-        <section className={styles.miniPlayerSlot} aria-label="mini player slot">
-          <div className={styles.slotLabel}>Mini player</div>
+        <section className={styles.miniPlayerSlot} aria-label="ミニプレーヤー">
+          <div className={styles.slotLabel}>ミニプレーヤー</div>
           <p className={styles.slotTitle}>{miniPlayer.title}</p>
           <p className={styles.slotCopy}>{miniPlayer.statusLine}</p>
         </section>

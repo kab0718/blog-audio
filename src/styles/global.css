@@ -14,7 +14,8 @@ body,
 
 body {
   margin: 0;
-  background: #050a12;
+  background: #080908;
+  overflow-x: hidden;
 }
 
 button,
@@ -27,6 +28,14 @@ select {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-accent-strong);
+  outline-offset: 3px;
 }
 
 img {

@@ -56,7 +56,7 @@ export function toArticleListItemViewModel(
     author: article.author,
     durationLabel: formatDurationLabel(article.estimatedDurationSeconds),
     tags: article.tags,
-    trackStatusLabel: track ? getAudioTrackLabel(track.status) : "Pending",
+    trackStatusLabel: track ? getAudioTrackLabel(track.status) : "未生成",
     trackStatusTone: track?.status ?? "generating",
     isCurrent: options.isCurrent,
     isQueued: options.isQueued,
@@ -97,7 +97,7 @@ export function toQueueListItemViewModel(
       article.author,
       formatDurationLabel(article.estimatedDurationSeconds),
     ].join(" ・ "),
-    badgeLabel: queueItem.queueState === "current" ? "Now" : "Queued",
+    badgeLabel: queueItem.queueState === "current" ? "再生中" : "待機",
   };
 }
 
@@ -127,33 +127,35 @@ export function getSourceLabel(sourceType: SourceType) {
 export function getAudioTrackLabel(status: AudioTrackStatus) {
   switch (status) {
     case "ready":
-      return "Ready";
+      return "再生準備完了";
     case "failed":
-      return "Failed";
+      return "生成失敗";
     case "generating":
     default:
-      return "Generating";
+      return "生成中";
   }
 }
 
 function getAudioTrackCopy(track: AudioTrack | undefined) {
   switch (track?.status ?? "generating") {
     case "ready":
-      return "生成済みトラックを再利用できます。";
+      return "音声をすぐ再生できます。";
     case "failed":
       return track?.errorMessage ?? "音声生成に失敗しました。";
     case "generating":
     default:
-      return "音声トラックを生成中です。";
+      return "音声を準備しています。";
   }
 }
 
 function getPlaybackResourceCopy(track: AudioTrack | undefined) {
   if (track?.status !== "ready" || !track.playbackResource) {
-    return "再生リソースは準備中です。";
+    return "再生できる音声を準備しています。";
   }
 
-  return `PlaybackResource.kind = ${track.playbackResource.kind}`;
+  return track.playbackResource.kind === "url"
+    ? "音声ファイルを読み込めます。"
+    : "音声チャンクを読み込めます。";
 }
 
 function getPrimaryActionLabel(
@@ -161,32 +163,32 @@ function getPrimaryActionLabel(
   playerStatus: PlayerStatus,
 ) {
   if (track?.status === "failed") {
-    return "Retry";
+    return "再試行";
   }
 
   if (track?.status !== "ready") {
-    return "Preparing";
+    return "準備中";
   }
 
-  return playerStatus === "playing" ? "Pause" : "Play";
+  return playerStatus === "playing" ? "一時停止" : "再生";
 }
 
 function getPlayerStatusLabel(status: PlayerStatus) {
   switch (status) {
     case "playing":
-      return "Playing";
+      return "再生中";
     case "paused":
-      return "Paused";
+      return "一時停止中";
     case "idle":
     default:
-      return "Idle";
+      return "待機中";
   }
 }
 
 function getQueueStatusLabel(isCurrent: boolean, isQueued: boolean) {
   if (isCurrent) {
-    return "Now playing";
+    return "再生中";
   }
 
-  return isQueued ? "Queued" : "Not queued";
+  return isQueued ? "キュー済み" : "未追加";
 }

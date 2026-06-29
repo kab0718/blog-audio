@@ -1,11 +1,25 @@
 :root {
   font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic UI", sans-serif;
   color-scheme: dark;
-  background-color: #050a12;
+  background-color: #080908;
   color: #f5f7fb;
 
   --color-text-primary: #f5f7fb;
-  --color-text-secondary: #a7b4ca;
-  --color-text-muted: #71819a;
-  --color-accent-soft: #8cb2ff;
+  --color-text-secondary: #b8c0bc;
+  --color-text-muted: #7d8983;
+  --color-accent-soft: #93c5ff;
+  --color-accent-strong: #c9f36d;
+  --color-success: #90e8bd;
+  --color-danger: #ffb8ad;
+  --color-surface-base: #101312;
+  --color-surface-raised: #171b19;
+  --color-surface-overlay: rgb(16 19 18 / 0.92);
+  --color-border-subtle: rgb(255 255 255 / 0.08);
+  --color-border-strong: rgb(255 255 255 / 0.14);
+  --radius-panel: 8px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
+  --tap-target: 44px;
+  --content-max-width: 1040px;
+  --shadow-footer: 0 18px 42px rgb(0 0 0 / 0.42);
 }
