@@ -3,7 +3,11 @@ import { Link } from "react-router-dom";
 import { useArticleLibrary } from "../../app/articles/ArticleLibraryContext";
 import { usePlayback } from "../../app/playback/PlaybackContext";
 import { useAudioTracks } from "../../app/tracks/AudioTrackContext";
-import { toArticleListItemViewModel } from "../../view-models/library";
+import type { Article } from "../../types/article";
+import {
+  getSourceLabel,
+  toArticleListItemViewModel,
+} from "../../view-models/library";
 import styles from "./ArticleListScreen.module.css";
 
 const ARTICLES_PER_PAGE = 8;
@@ -23,18 +27,36 @@ export function ArticleListScreen() {
     "idle" | "adding" | "success" | "error"
   >("idle");
   const [urlAddMessage, setUrlAddMessage] = useState<string | null>(null);
-  const totalPages = Math.max(1, Math.ceil(articles.length / ARTICLES_PER_PAGE));
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const filteredArticles = useMemo(
+    () => filterArticles(articles, searchQuery, selectedTag),
+    [articles, searchQuery, selectedTag],
+  );
+  const availableTags = useMemo(() => getAvailableTags(articles), [articles]);
+  const hasSearchConditions =
+    searchQuery.trim().length > 0 || selectedTag !== null;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredArticles.length / ARTICLES_PER_PAGE),
+  );
   const visibleArticles = useMemo(() => {
     const startIndex = (currentPage - 1) * ARTICLES_PER_PAGE;
 
-    return articles.slice(startIndex, startIndex + ARTICLES_PER_PAGE);
-  }, [articles, currentPage]);
+    return filteredArticles.slice(startIndex, startIndex + ARTICLES_PER_PAGE);
+  }, [currentPage, filteredArticles]);
   const pageStartIndex =
-    articles.length > 0 ? (currentPage - 1) * ARTICLES_PER_PAGE + 1 : 0;
+    filteredArticles.length > 0
+      ? (currentPage - 1) * ARTICLES_PER_PAGE + 1
+      : 0;
   const pageEndIndex = Math.min(
     currentPage * ARTICLES_PER_PAGE,
-    articles.length,
+    filteredArticles.length,
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedTag]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages));
@@ -71,7 +93,7 @@ export function ArticleListScreen() {
       );
       setArticleUrl("");
 
-      if (!wasAlreadyInLibrary) {
+      if (!wasAlreadyInLibrary && !hasSearchConditions) {
         setCurrentPage(
           Math.max(1, Math.ceil((articles.length + 1) / ARTICLES_PER_PAGE)),
         );
@@ -148,6 +170,62 @@ export function ArticleListScreen() {
         ) : null}
       </form>
 
+      {status === "success" ? (
+        <section className={styles.searchPanel} aria-label="記事検索">
+          <label className={styles.searchLabel} htmlFor="article-search">
+            記事を検索
+          </label>
+          <div className={styles.searchInputRow}>
+            <input
+              id="article-search"
+              className={styles.searchInput}
+              type="search"
+              placeholder="タイトル、著者、タグで検索"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            <button
+              type="button"
+              className={styles.clearSearchButton}
+              disabled={!hasSearchConditions}
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedTag(null);
+              }}
+            >
+              クリア
+            </button>
+          </div>
+          {availableTags.length > 0 ? (
+            <div className={styles.filterTags} aria-label="タグで絞り込み">
+              {availableTags.map((tag) => {
+                const isSelected = selectedTag === tag;
+
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={
+                      isSelected
+                        ? `${styles.filterTag} ${styles.filterTagSelected}`
+                        : styles.filterTag
+                    }
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedTag(isSelected ? null : tag)}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <p className={styles.searchSummary}>
+            検索結果 {filteredArticles.length} / {articles.length} 件
+            {selectedTag ? ` ・ タグ: ${selectedTag}` : ""}
+          </p>
+        </section>
+      ) : null}
+
       {status === "loading" ? (
         <div className={styles.stateCard}>
           <p className={styles.stateTitle}>記事一覧を取得中</p>
@@ -183,123 +261,202 @@ export function ArticleListScreen() {
 
       {status === "success" ? (
         <>
-          <div className={styles.paginationSummary}>
-            <span>
-              {pageStartIndex}-{pageEndIndex} / {articles.length} 件
-            </span>
-            <span>
-              ページ {currentPage} / {totalPages}
-            </span>
-          </div>
+          {filteredArticles.length === 0 ? (
+            <div className={styles.stateCard}>
+              <p className={styles.stateTitle}>条件に合う記事がありません</p>
+              <p className={styles.stateCopy}>
+                キーワードやタグ条件を変えると、取得済みの記事からもう一度探せます。
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className={styles.paginationSummary}>
+                <span>
+                  {pageStartIndex}-{pageEndIndex} / {filteredArticles.length} 件
+                </span>
+                <span>
+                  ページ {currentPage} / {totalPages}
+                </span>
+              </div>
 
-          <ul className={styles.list}>
-            {visibleArticles.map((article, index) => {
-              const articleIndex =
-                (currentPage - 1) * ARTICLES_PER_PAGE + index;
-              const isQueued = queueItemIds.includes(article.id);
-              const viewModel = toArticleListItemViewModel(
-                article,
-                getTrackByArticleId(article.id),
-                {
-                  index: articleIndex,
-                  isCurrent: article.id === currentQueueItemId,
-                  isQueued,
-                },
-              );
+              <ul className={styles.list}>
+                {visibleArticles.map((article, index) => {
+                  const articleIndex =
+                    (currentPage - 1) * ARTICLES_PER_PAGE + index;
+                  const isQueued = queueItemIds.includes(article.id);
+                  const viewModel = toArticleListItemViewModel(
+                    article,
+                    getTrackByArticleId(article.id),
+                    {
+                      index: articleIndex,
+                      isCurrent: article.id === currentQueueItemId,
+                      isQueued,
+                    },
+                  );
 
-              return (
-                <li
-                  key={viewModel.id}
-                  className={
-                    viewModel.isCurrent
-                      ? `${styles.item} ${styles.itemCurrent}`
-                      : styles.item
-                  }
-                >
-                  <div className={styles.trackIndex}>
-                    {viewModel.indexLabel}
-                  </div>
-                  <div className={styles.trackBody}>
-                    <div className={styles.metaRow}>
-                      <span>{viewModel.sourceLabel}</span>
-                      <span>{viewModel.author}</span>
-                      <span>{viewModel.durationLabel}</span>
-                      <span
-                        className={`${styles.statusBadge} ${styles[`statusBadge${capitalizeStatus(viewModel.trackStatusTone)}`]}`}
-                      >
-                        {viewModel.trackStatusLabel}
-                      </span>
-                    </div>
-                    <h2 className={styles.title}>{viewModel.title}</h2>
-                    {viewModel.summary ? (
-                      <p className={styles.summary}>{viewModel.summary}</p>
-                    ) : null}
-                    <div className={styles.footerRow}>
-                      {viewModel.tags.length > 0 ? (
-                        <div className={styles.tags}>
-                          {viewModel.tags.map((tag) => (
-                            <span key={tag} className={styles.tag}>
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className={styles.actions}>
-                        <span className={styles.queueStatus}>
-                          {viewModel.queueStatusLabel}
-                        </span>
-                        <button
-                          type="button"
-                          className={styles.secondaryAction}
-                          disabled={viewModel.isQueued}
-                          onClick={() => addArticleToQueue(viewModel.id)}
-                        >
-                          {viewModel.isQueued ? "追加済み" : "キューに追加"}
-                        </button>
-                        <Link
-                          className={styles.actionLink}
-                          to="/player"
-                          onClick={() => {
-                            playArticleNow(viewModel.id);
-                          }}
-                        >
-                          {viewModel.isCurrent ? "再生画面へ" : "今すぐ再生"}
-                        </Link>
+                  return (
+                    <li
+                      key={viewModel.id}
+                      className={
+                        viewModel.isCurrent
+                          ? `${styles.item} ${styles.itemCurrent}`
+                          : styles.item
+                      }
+                    >
+                      <div className={styles.trackIndex}>
+                        {viewModel.indexLabel}
                       </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      <div className={styles.trackBody}>
+                        <div className={styles.metaRow}>
+                          <span>{viewModel.sourceLabel}</span>
+                          <span>{viewModel.author}</span>
+                          <span>{viewModel.durationLabel}</span>
+                          <span
+                            className={`${styles.statusBadge} ${styles[`statusBadge${capitalizeStatus(viewModel.trackStatusTone)}`]}`}
+                          >
+                            {viewModel.trackStatusLabel}
+                          </span>
+                        </div>
+                        <h2 className={styles.title}>{viewModel.title}</h2>
+                        {viewModel.summary ? (
+                          <p className={styles.summary}>{viewModel.summary}</p>
+                        ) : null}
+                        <div className={styles.footerRow}>
+                          {viewModel.tags.length > 0 ? (
+                            <div className={styles.tags}>
+                              {viewModel.tags.map((tag) => {
+                                const isSelected = selectedTag === tag;
 
-          {totalPages > 1 ? (
-            <nav className={styles.pagination} aria-label="記事一覧ページ">
-              <button
-                type="button"
-                className={styles.pageButton}
-                disabled={currentPage === 1}
-                onClick={() => goToPage(currentPage - 1)}
-              >
-                前へ
-              </button>
-              <span className={styles.pageStatus}>
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className={styles.pageButton}
-                disabled={currentPage === totalPages}
-                onClick={() => goToPage(currentPage + 1)}
-              >
-                次へ
-              </button>
-            </nav>
-          ) : null}
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    className={
+                                      isSelected
+                                        ? `${styles.tagButton} ${styles.tagButtonSelected}`
+                                        : styles.tagButton
+                                    }
+                                    aria-pressed={isSelected}
+                                    onClick={() =>
+                                      setSelectedTag(isSelected ? null : tag)
+                                    }
+                                  >
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <div className={styles.actions}>
+                            <span className={styles.queueStatus}>
+                              {viewModel.queueStatusLabel}
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.secondaryAction}
+                              disabled={viewModel.isQueued}
+                              onClick={() => addArticleToQueue(viewModel.id)}
+                            >
+                              {viewModel.isQueued ? "追加済み" : "キューに追加"}
+                            </button>
+                            <Link
+                              className={styles.actionLink}
+                              to="/player"
+                              onClick={() => {
+                                playArticleNow(viewModel.id);
+                              }}
+                            >
+                              {viewModel.isCurrent ? "再生画面へ" : "今すぐ再生"}
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {totalPages > 1 ? (
+                <nav className={styles.pagination} aria-label="記事一覧ページ">
+                  <button
+                    type="button"
+                    className={styles.pageButton}
+                    disabled={currentPage === 1}
+                    onClick={() => goToPage(currentPage - 1)}
+                  >
+                    前へ
+                  </button>
+                  <span className={styles.pageStatus}>
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.pageButton}
+                    disabled={currentPage === totalPages}
+                    onClick={() => goToPage(currentPage + 1)}
+                  >
+                    次へ
+                  </button>
+                </nav>
+              ) : null}
+            </>
+          )}
         </>
       ) : null}
     </section>
   );
+}
+
+function filterArticles(
+  articles: Article[],
+  searchQuery: string,
+  selectedTag: string | null,
+) {
+  const searchTerms = normalizeSearchText(searchQuery)
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return articles.filter((article) => {
+    if (selectedTag && !article.tags.includes(selectedTag)) {
+      return false;
+    }
+
+    if (searchTerms.length === 0) {
+      return true;
+    }
+
+    const searchableText = normalizeSearchText(
+      [
+        article.title,
+        article.author,
+        article.summary ?? "",
+        article.tags.join(" "),
+        getSourceLabel(article.sourceType),
+      ].join(" "),
+    );
+
+    return searchTerms.every((term) => searchableText.includes(term));
+  });
+}
+
+function getAvailableTags(articles: Article[]) {
+  const seenTags = new Set<string>();
+
+  articles.forEach((article) => {
+    article.tags.forEach((tag) => {
+      if (tag.trim()) {
+        seenTags.add(tag);
+      }
+    });
+  });
+
+  return Array.from(seenTags).sort((a, b) =>
+    a.localeCompare(b, "ja", { sensitivity: "base" }),
+  );
+}
+
+function normalizeSearchText(value: string) {
+  return value.normalize("NFKC").toLocaleLowerCase();
 }
 
 function capitalizeStatus(value: string) {
