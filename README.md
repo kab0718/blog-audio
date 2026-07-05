@@ -21,6 +21,7 @@
 - `docs/tasks/09-zenn-rate-limit-resilient-article-library.md`: issue #14 に対応する Zenn API rate limit 対策タスクの実装計画
 - `docs/tasks/10-playback-controls-track-state-management.md`: issue #11 に対応する再生操作とトラック状態管理タスクの実装計画
 - `docs/tasks/12-queue-management-continuous-playback.md`: issue #12 に対応するキュー管理画面と連続再生タスクの実装計画
+- `docs/tasks/24-article-url-queue-add.md`: issue #24 に対応するブログ URL からのキュー追加タスクの実装記録
 
 ## Commands
 
@@ -60,6 +61,7 @@ Production では service account key file の直置きを避け、deployment pl
 - コードブロックを逐語読みしない変換と、TTS 向けナレーション台本生成を追加済み
 - 生成中 / ready / failed を扱う `AudioTrack` 生成 service と in-memory cache を追加済み
 - 記事の明示的なキュー追加 / 削除 / 並び替えと、Next / 音声終了時の連続再生制御を追加済み
+- Zenn / Qiita の記事 URL を入力して、記事をライブラリへ追加しキューへ積む導線を追加済み
 - 再生速度変更を追加済み
 - Zenn / Qiita / TTS provider を同一 origin API 境界へ寄せ、Google Cloud Text-to-Speech による実 TTS 生成を追加済み
 - Google Cloud Text-to-Speech の project / billing / API / budget alert / local ADC / smoke test は準備済み

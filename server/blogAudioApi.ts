@@ -77,6 +77,11 @@ type GoogleAccessToken = {
   userProject: string | null;
 };
 
+type SupportedArticleUrl = {
+  source: "zenn" | "qiita";
+  sourceArticleId: string;
+};
+
 const providerJsonCache = new Map<string, ProviderJsonCacheEntry>();
 const ttsAudioCache = new Map<string, TtsApiSuccessPayload>();
 let googleAccessTokenCache: GoogleAccessToken | null = null;
@@ -115,6 +120,14 @@ async function handleApiRequest(
   try {
     if (request.method === "GET" && requestUrl.pathname === "/api/articles") {
       await handleArticlesRequest(requestUrl, response);
+      return "handled";
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/api/article-from-url"
+    ) {
+      await handleArticleFromUrlRequest(requestUrl, response);
       return "handled";
     }
 
@@ -203,6 +216,60 @@ async function handleArticlesRequest(requestUrl: URL, response: any) {
   }
 
   throw new ApiError(400, "bad_request", "Unsupported article source");
+}
+
+async function handleArticleFromUrlRequest(requestUrl: URL, response: any) {
+  const rawUrl = requestUrl.searchParams.get("url");
+  const resolvedUrl = resolveSupportedArticleUrl(rawUrl);
+
+  if (resolvedUrl.source === "zenn") {
+    const payload = await fetchCachedProviderJson({
+      url: `${ZENN_ARTICLE_URL}/${encodeURIComponent(resolvedUrl.sourceArticleId)}`,
+      cacheKey: `article-from-url:zenn:${resolvedUrl.sourceArticleId}`,
+      ttlMs: ARTICLE_CONTENT_CACHE_TTL_MS,
+      staleOnError: true,
+    });
+
+    if (!isRecord(payload) || !isRecord(payload.article)) {
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Zenn article response shape is not supported",
+      );
+    }
+
+    const article = toArticleFromZenn(payload.article);
+
+    if (!article) {
+      throw new ApiError(
+        502,
+        "unsupported_response_shape",
+        "Zenn article response could not be normalized",
+      );
+    }
+
+    sendJson(response, 200, article);
+    return;
+  }
+
+  const payload = await fetchCachedProviderJson({
+    url: `${QIITA_ITEM_URL}/${encodeURIComponent(resolvedUrl.sourceArticleId)}`,
+    cacheKey: `article-from-url:qiita:${resolvedUrl.sourceArticleId}`,
+    ttlMs: ARTICLE_CONTENT_CACHE_TTL_MS,
+    staleOnError: true,
+  });
+
+  const article = toArticleFromQiita(payload);
+
+  if (!article) {
+    throw new ApiError(
+      502,
+      "unsupported_response_shape",
+      "Qiita article response could not be normalized",
+    );
+  }
+
+  sendJson(response, 200, article);
 }
 
 async function handleArticleContentRequest(requestUrl: URL, response: any) {
@@ -1139,6 +1206,97 @@ function toArticleFromQiita(rawItem: unknown) {
     estimatedDurationSeconds: estimateDurationSecondsFromText(body),
     tags: getQiitaTagNames(rawItem.tags),
     summary: buildQiitaSummary(body) ?? undefined,
+  };
+}
+
+function resolveSupportedArticleUrl(rawUrl: string | null): SupportedArticleUrl {
+  const articleUrl = toNonEmptyString(rawUrl);
+
+  if (!articleUrl) {
+    throw new ApiError(
+      400,
+      "bad_request",
+      "Article URL is required",
+    );
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(articleUrl);
+  } catch {
+    throw new ApiError(
+      400,
+      "bad_request",
+      "Article URL must be a valid URL",
+    );
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    throw new ApiError(
+      400,
+      "unsupported_article_url",
+      "Only HTTPS Zenn or Qiita article URLs are supported",
+    );
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase().replace(/^www\./, "");
+  const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+
+  if (hostname === "zenn.dev") {
+    return resolveZennArticleUrl(pathParts);
+  }
+
+  if (hostname === "qiita.com") {
+    return resolveQiitaArticleUrl(pathParts);
+  }
+
+  throw new ApiError(
+    400,
+    "unsupported_article_url",
+    "Only Zenn or Qiita article URLs are supported",
+  );
+}
+
+function resolveZennArticleUrl(pathParts: string[]): SupportedArticleUrl {
+  const articleSegmentIndex = pathParts.indexOf("articles");
+  const sourceArticleId =
+    articleSegmentIndex >= 1
+      ? toNonEmptyString(pathParts[articleSegmentIndex + 1])
+      : null;
+
+  if (!sourceArticleId) {
+    throw new ApiError(
+      400,
+      "unsupported_article_url",
+      "Zenn article URL must include /articles/{slug}",
+    );
+  }
+
+  return {
+    source: "zenn",
+    sourceArticleId,
+  };
+}
+
+function resolveQiitaArticleUrl(pathParts: string[]): SupportedArticleUrl {
+  const itemSegmentIndex = pathParts.indexOf("items");
+  const sourceArticleId =
+    itemSegmentIndex >= 1
+      ? toNonEmptyString(pathParts[itemSegmentIndex + 1])
+      : null;
+
+  if (!sourceArticleId) {
+    throw new ApiError(
+      400,
+      "unsupported_article_url",
+      "Qiita article URL must include /items/{id}",
+    );
+  }
+
+  return {
+    source: "qiita",
+    sourceArticleId,
   };
 }
 

@@ -5,8 +5,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { fetchArticleFromUrl } from "../../sources/articleFromUrl";
 import { fetchQiitaArticles } from "../../sources/qiita/articles";
 import { fetchZennDailyPopularArticles } from "../../sources/zenn/articles";
 import type { Article } from "../../types/article";
@@ -21,6 +23,10 @@ type ArticleLibraryState = {
 
 type ArticleLibraryContextValue = ArticleLibraryState & {
   retry: () => void;
+  addArticleFromUrl: (url: string) => Promise<{
+    article: Article;
+    wasAlreadyInLibrary: boolean;
+  }>;
   getArticleById: (articleId: string | null) => Article | undefined;
 };
 
@@ -36,6 +42,7 @@ const ArticleLibraryContext =
 export function ArticleLibraryProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ArticleLibraryState>(initialState);
   const [reloadKey, setReloadKey] = useState(0);
+  const manuallyAddedArticlesRef = useRef<Article[]>([]);
 
   useEffect(() => {
     let isActive = true;
@@ -53,13 +60,25 @@ export function ArticleLibraryProvider({ children }: { children: ReactNode }) {
         }
 
         setState({
-          status: articles.length > 0 ? "success" : "empty",
-          articles,
+          status:
+            articles.length > 0 || manuallyAddedArticlesRef.current.length > 0
+              ? "success"
+              : "empty",
+          articles: mergeArticles(articles, manuallyAddedArticlesRef.current),
           errorMessage: null,
         });
       })
       .catch((error: unknown) => {
         if (!isActive) {
+          return;
+        }
+
+        if (manuallyAddedArticlesRef.current.length > 0) {
+          setState({
+            status: "success",
+            articles: manuallyAddedArticlesRef.current,
+            errorMessage: null,
+          });
           return;
         }
 
@@ -82,6 +101,37 @@ export function ArticleLibraryProvider({ children }: { children: ReactNode }) {
     setReloadKey((currentKey) => currentKey + 1);
   }, []);
 
+  const addArticleFromUrl = useCallback(
+    async (url: string) => {
+      const article = await fetchArticleFromUrl(url);
+      const existingArticle = findMatchingArticle(state.articles, article);
+
+      if (existingArticle) {
+        return {
+          article: existingArticle,
+          wasAlreadyInLibrary: true,
+        };
+      }
+
+      manuallyAddedArticlesRef.current = mergeArticles(
+        manuallyAddedArticlesRef.current,
+        [article],
+      );
+
+      setState((currentState) => ({
+        status: "success",
+        articles: mergeArticles(currentState.articles, [article]),
+        errorMessage: null,
+      }));
+
+      return {
+        article,
+        wasAlreadyInLibrary: false,
+      };
+    },
+    [state.articles],
+  );
+
   const getArticleById = useCallback(
     (articleId: string | null) => {
       if (!articleId) {
@@ -97,9 +147,10 @@ export function ArticleLibraryProvider({ children }: { children: ReactNode }) {
     () => ({
       ...state,
       retry,
+      addArticleFromUrl,
       getArticleById,
     }),
-    [getArticleById, retry, state],
+    [addArticleFromUrl, getArticleById, retry, state],
   );
 
   return (
@@ -142,4 +193,40 @@ function isFulfilledArticleResult(
   result: PromiseSettledResult<Article[]>,
 ): result is PromiseFulfilledResult<Article[]> {
   return result.status === "fulfilled";
+}
+
+function mergeArticles(primaryArticles: Article[], secondaryArticles: Article[]) {
+  const mergedArticles = [...primaryArticles];
+
+  secondaryArticles.forEach((article) => {
+    if (!findMatchingArticle(mergedArticles, article)) {
+      mergedArticles.push(article);
+    }
+  });
+
+  return mergedArticles;
+}
+
+function findMatchingArticle(articles: Article[], article: Article) {
+  const normalizedUrl = normalizeArticleUrl(article.url);
+
+  return articles.find(
+    (existingArticle) =>
+      existingArticle.id === article.id ||
+      (existingArticle.sourceType === article.sourceType &&
+        existingArticle.sourceArticleId === article.sourceArticleId) ||
+      normalizeArticleUrl(existingArticle.url) === normalizedUrl,
+  );
+}
+
+function normalizeArticleUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    parsedUrl.hash = "";
+    parsedUrl.search = "";
+
+    return parsedUrl.toString().replace(/\/$/, "");
+  } catch {
+    return url.trim().replace(/\/$/, "");
+  }
 }

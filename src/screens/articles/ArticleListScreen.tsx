@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useArticleLibrary } from "../../app/articles/ArticleLibraryContext";
 import { usePlayback } from "../../app/playback/PlaybackContext";
@@ -9,7 +9,8 @@ import styles from "./ArticleListScreen.module.css";
 const ARTICLES_PER_PAGE = 8;
 
 export function ArticleListScreen() {
-  const { articles, errorMessage, retry, status } = useArticleLibrary();
+  const { addArticleFromUrl, articles, errorMessage, retry, status } =
+    useArticleLibrary();
   const {
     state: { currentQueueItemId, queueItemIds },
     addArticleToQueue,
@@ -17,6 +18,11 @@ export function ArticleListScreen() {
   } = usePlayback();
   const { getTrackByArticleId } = useAudioTracks();
   const [currentPage, setCurrentPage] = useState(1);
+  const [articleUrl, setArticleUrl] = useState("");
+  const [urlAddStatus, setUrlAddStatus] = useState<
+    "idle" | "adding" | "success" | "error"
+  >("idle");
+  const [urlAddMessage, setUrlAddMessage] = useState<string | null>(null);
   const totalPages = Math.max(1, Math.ceil(articles.length / ARTICLES_PER_PAGE));
   const visibleArticles = useMemo(() => {
     const startIndex = (currentPage - 1) * ARTICLES_PER_PAGE;
@@ -39,6 +45,47 @@ export function ArticleListScreen() {
     window.scrollTo({ top: 0, behavior: "auto" });
   };
 
+  const handleUrlSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedUrl = articleUrl.trim();
+
+    if (!trimmedUrl || urlAddStatus === "adding") {
+      return;
+    }
+
+    setUrlAddStatus("adding");
+    setUrlAddMessage(null);
+
+    try {
+      const { article, wasAlreadyInLibrary } =
+        await addArticleFromUrl(trimmedUrl);
+      const wasAlreadyQueued = queueItemIds.includes(article.id);
+
+      addArticleToQueue(article.id);
+      setUrlAddStatus("success");
+      setUrlAddMessage(
+        wasAlreadyQueued
+          ? `追加済みです: ${article.title}`
+          : `${wasAlreadyInLibrary ? "既存の記事を" : "記事を"}キューに追加しました: ${article.title}`,
+      );
+      setArticleUrl("");
+
+      if (!wasAlreadyInLibrary) {
+        setCurrentPage(
+          Math.max(1, Math.ceil((articles.length + 1) / ARTICLES_PER_PAGE)),
+        );
+      }
+    } catch (error: unknown) {
+      setUrlAddStatus("error");
+      setUrlAddMessage(
+        error instanceof Error
+          ? error.message
+          : "URLから記事を追加できませんでした。",
+      );
+    }
+  };
+
   return (
     <section className={styles.screen}>
       <div className={styles.intro}>
@@ -58,6 +105,48 @@ export function ArticleListScreen() {
           <strong className={styles.metricValue}>{queueItemIds.length}</strong>
         </div>
       </div>
+
+      <form className={styles.urlForm} onSubmit={handleUrlSubmit}>
+        <label className={styles.urlLabel} htmlFor="article-url">
+          ブログURLから追加
+        </label>
+        <div className={styles.urlInputRow}>
+          <input
+            id="article-url"
+            className={styles.urlInput}
+            type="text"
+            inputMode="url"
+            autoComplete="url"
+            placeholder="https://zenn.dev/.../articles/..."
+            value={articleUrl}
+            onChange={(event) => {
+              setArticleUrl(event.target.value);
+              if (urlAddStatus !== "adding") {
+                setUrlAddStatus("idle");
+                setUrlAddMessage(null);
+              }
+            }}
+          />
+          <button
+            type="submit"
+            className={styles.urlSubmitButton}
+            disabled={urlAddStatus === "adding" || articleUrl.trim().length === 0}
+          >
+            {urlAddStatus === "adding" ? "追加中" : "追加"}
+          </button>
+        </div>
+        {urlAddMessage ? (
+          <p
+            className={
+              urlAddStatus === "error"
+                ? `${styles.urlMessage} ${styles.urlMessageError}`
+                : styles.urlMessage
+            }
+          >
+            {urlAddMessage}
+          </p>
+        ) : null}
+      </form>
 
       {status === "loading" ? (
         <div className={styles.stateCard}>

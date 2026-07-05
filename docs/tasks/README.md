@@ -29,6 +29,7 @@
 - [18-production-api-boundary.md](./18-production-api-boundary.md): 本番用 API 境界
 - [22-google-cloud-text-to-speech-setup.md](./22-google-cloud-text-to-speech-setup.md): Google Cloud Text-to-Speech 利用準備と認証設定
 - [23-google-cloud-tts-provider-switch.md](./23-google-cloud-tts-provider-switch.md): Google Cloud Text-to-Speech への TTS provider 切り替え
+- [24-article-url-queue-add.md](./24-article-url-queue-add.md): ブログ URL からの記事追加とキュー投入
 
 ## 未実装
 
