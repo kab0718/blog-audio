@@ -23,10 +23,12 @@ description: 精錬済みのblog-audio GitHub Issueを、実行ごとに専用gi
 ### 2. 実行専用worktreeを作成する
 
 - `references/invocation-isolation.md`を読む。
-- `codex/issue-<番号>-<slug>`形式の一意なブランチと、`../blog-audio-worktrees/issue-<番号>-<slug>`形式のworktreeパスを決める。
+- `codex/issue-<番号>-<slug>`形式の一意なブランチと、リポジトリルート配下の`.worktrees/issue-<番号>-<slug>`形式のworktreeパスを決める。
+- worktree作成前に、リポジトリローカルの`.git/info/exclude`で`.worktrees/`を除外する。既存内容を保持し、同じ除外設定を重複追加しない。
 - 作成前に`git worktree list`とローカルブランチを確認する。他の実行が所有するworktreeやブランチを再利用、reset、削除、上書きしない。
 - 同じIssueのworktreeがある場合は、ブランチ、状態、目的が今回の実行と明確に一致するときだけ再開する。それ以外は一意な接尾辞を付けて報告する。
 - 更新済みの`origin/main`からブランチとworktreeを作成する。
+- worktree作成後、元worktreeの`git status --short`に`.worktrees/`が現れないことを確認する。
 - 編集、検証、レビュー修正、コミット、PR公開をすべて専用worktree内で行う。
 - ポート、ログ、スクリーンショット、パッチ、一時ファイルをIssueまたは実行単位で分離する。
 - ユーザーの元worktreeを変更しない。

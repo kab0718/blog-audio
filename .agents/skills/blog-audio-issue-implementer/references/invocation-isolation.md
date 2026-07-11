@@ -8,8 +8,10 @@ Issue番号と短いslugから安定した名前を作る。
 
 ```text
 branch:   codex/issue-42-player-seek
-worktree: ../blog-audio-worktrees/issue-42-player-seek
+worktree: <repo-root>/.worktrees/issue-42-player-seek
 ```
+
+worktreeは必ず対象リポジトリのルート直下にある`.worktrees/`へ作成する。作成前に`.git/info/exclude`へ`.worktrees/`が登録済みか確認し、未登録の場合だけ追加する。trackedな`.gitignore`は変更せず、元worktreeの`git status --short`にworktreeディレクトリを出さない。
 
 Issue番号がない場合は一意なタスク識別子を使う。パスやブランチが無関係または所有者不明の作業に使われている場合は、変更せず短い一意な接尾辞を付ける。
 
