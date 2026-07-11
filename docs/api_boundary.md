@@ -8,6 +8,11 @@
   - Zenn のデイリー人気記事を取得し、共通 `Article[]` として返す。
 - `GET /api/articles?source=qiita`
   - Qiita の記事一覧を取得し、共通 `Article[]` として返す。
+- `GET /api/articles?source={zenn|qiita}&query=...&tag=...&page=1&perPage=8&order=latest`
+  - `query` または `tag` がある場合は provider 検索として扱う。両方があれば AND 条件にする。
+  - `page` は1以上、`perPage` は1〜20、検索時の `order` は `latest` を使う。不正値は `bad_request`。
+  - client の「すべて」は API の source 値ではなく、Qiita / Zenn の2リクエストを並行実行する。
+  - Qiita は公式 API v2 の query 構文（タグは `tag:<name>`）を使う。Zenn は非公式の検索・topic interface を server-side に閉じ込める。
 - `GET /api/article-from-url?url=...`
   - Zenn / Qiita の記事 URL を解析し、provider から記事詳細を取得して共通 `Article` として返す。
   - MVP では `https://zenn.dev/{user}/articles/{slug}` と `https://qiita.com/{user}/items/{id}` 形式だけを対象にする。
@@ -71,6 +76,7 @@ GOOGLE_CLOUD_TTS_API_KEY=
 ## Cache
 
 - Zenn / Qiita の記事一覧は API 境界の in-memory cache に短時間保持する。
+- 検索 cache は正規化した `source`、`query`、`tag`、`page`、`perPage`、`order` の組み合わせごとに分離する。
 - 記事本文は source article id ごとに API 境界の in-memory cache に保持する。
 - provider request が rate limit / timeout / 一時失敗した場合、stale cache があれば stale payload を返して article library 全体の破綻を避ける。
 
@@ -84,5 +90,6 @@ GOOGLE_CLOUD_TTS_API_KEY=
 
 - Vite middleware は MVP 用の local implementation であり、本番運用では同じ contract の server / edge 実装が必要。
 - 現行の `/api/tts` adapter は Google Cloud Text-to-Speech の MP3 生成に対応している。
+- Zenn の検索・topic interface は公式に安定保証された公開 API ではなく、Zenn 側の変更で検索だけが失敗する可能性がある。「すべて」検索では Qiita が成功すれば部分結果を表示する。
 - 生成済み音声の永続 cache と容量管理は [20-persistent-audio-track-cache.md](./tasks/20-persistent-audio-track-cache.md) の範囲。
 - PWA / background / lock screen の挙動確認は [21-pwa-mobile-device-playback-validation.md](./tasks/21-pwa-mobile-device-playback-validation.md) の範囲。

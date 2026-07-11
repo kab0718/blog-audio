@@ -5,6 +5,13 @@ import type { RawArticleContentInput } from "../../types/articleContent";
 const QIITA_ITEMS_URL = "/api/articles?source=qiita";
 const QIITA_ITEM_URL = "/api/article-content";
 
+export type ArticleSearchConditions = {
+  query: string;
+  tag: string | null;
+  page: number;
+  perPage: number;
+};
+
 export async function fetchQiitaArticles(): Promise<Article[]> {
   const response = await fetch(QIITA_ITEMS_URL, {
     headers: {
@@ -25,6 +32,33 @@ export async function fetchQiitaArticles(): Promise<Article[]> {
   }
 
   return payload.filter(isArticle);
+}
+
+export async function searchQiitaArticles(conditions: ArticleSearchConditions) {
+  return fetchQiitaArticleList(createSearchUrl("qiita", conditions));
+}
+
+async function fetchQiitaArticleList(requestUrl: string) {
+  const response = await fetch(requestUrl, { headers: { Accept: "application/json" } });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Qiita article search failed"));
+  }
+  const payload: unknown = await response.json();
+  if (!Array.isArray(payload)) throw new Error("Qiita articles response shape is not supported");
+  return payload.filter(isArticle);
+}
+
+function createSearchUrl(source: "qiita", conditions: ArticleSearchConditions) {
+  const params = new URLSearchParams({
+    source,
+    page: String(conditions.page),
+    perPage: String(conditions.perPage),
+    order: "latest",
+  });
+  const query = conditions.query.trim();
+  if (query) params.set("query", query);
+  if (conditions.tag) params.set("tag", conditions.tag.trim());
+  return `/api/articles?${params.toString()}`;
 }
 
 export async function fetchQiitaArticleContent(
