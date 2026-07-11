@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blog Audio Issue実装"
+  short_description: "Issueごとの独立worktreeで実装しDraft PR化する"
+  default_prompt: "$blog-audio-issue-implementer を使って、精錬済みのblog-audio Issueを専用worktreeで実装し、レビュー後にDraft PRを作成してください。"

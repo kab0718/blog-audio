@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blog Audio Issue精錬"
+  short_description: "Issueを調査済みの実装可能な計画へ更新するスキル"
+  default_prompt: "$blog-audio-issue-refiner を使って、このblog-audio Issueを実装可能な計画へ精錬し、Issue本文を更新してください。"
