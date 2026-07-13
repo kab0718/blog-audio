@@ -6,6 +6,8 @@ const ZENN_ARTICLES_URL = "https://zenn.dev/api/articles?order=daily";
 const ZENN_ARTICLE_URL = "https://zenn.dev/api/articles";
 const QIITA_ITEMS_URL = "https://qiita.com/api/v2/items?page=1&per_page=8";
 const QIITA_ITEM_URL = "https://qiita.com/api/v2/items";
+const ZENN_SEARCH_URL = "https://zenn.dev/api/search";
+const ZENN_TOPICS_URL = "https://zenn.dev/api/topics";
 const ZENN_BASE_URL = "https://zenn.dev";
 const QIITA_BASE_URL = "https://qiita.com";
 const GOOGLE_TTS_SYNTHESIZE_URL =
@@ -162,6 +164,70 @@ async function handleApiRequest(
 
 async function handleArticlesRequest(requestUrl: URL, response: any) {
   const source = requestUrl.searchParams.get("source");
+  const conditions = parseArticleListConditions(requestUrl);
+
+  if (conditions.isSearch) {
+    const { query, tag, page, perPage, order } = conditions;
+
+    if (source === "qiita") {
+      const providerQuery = [query, tag ? `tag:${tag}` : null]
+        .filter((value): value is string => Boolean(value))
+        .join(" ");
+      const providerUrl = new URL(QIITA_ITEM_URL);
+      providerUrl.searchParams.set("query", providerQuery);
+      providerUrl.searchParams.set("page", String(page));
+      providerUrl.searchParams.set("per_page", String(perPage));
+      const payload = await fetchCachedProviderJson({
+        url: providerUrl.toString(),
+        cacheKey: createArticleSearchCacheKey(source, conditions),
+        ttlMs: ARTICLE_LIST_CACHE_TTL_MS,
+        staleOnError: true,
+      });
+
+      if (!Array.isArray(payload)) {
+        throw new ApiError(502, "unsupported_response_shape", "Qiita search response shape is not supported");
+      }
+
+      sendJson(response, 200, payload.map(toArticleFromQiita).filter((article) => article !== null));
+      return;
+    }
+
+    if (source === "zenn") {
+      const providerUrl = tag
+        ? new URL(`${ZENN_TOPICS_URL}/${encodeURIComponent(tag)}/articles`)
+        : new URL(ZENN_SEARCH_URL);
+
+      if (tag) {
+        providerUrl.searchParams.set("order", order);
+        providerUrl.searchParams.set("page", String(page));
+      } else {
+        providerUrl.searchParams.set("q", query ?? "");
+        providerUrl.searchParams.set("source", "articles");
+        providerUrl.searchParams.set("page", String(page));
+      }
+
+      const payload = await fetchCachedProviderJson({
+        url: providerUrl.toString(),
+        cacheKey: createArticleSearchCacheKey(source, conditions),
+        ttlMs: ARTICLE_LIST_CACHE_TTL_MS,
+        staleOnError: true,
+      });
+      const rawArticles = getZennArticlesPayload(payload);
+      let articles = rawArticles.map(toArticleFromZenn).filter((article) => article !== null);
+
+      if (tag && query) {
+        const normalizedQuery = query.normalize("NFKC").toLocaleLowerCase();
+        articles = articles.filter((article) =>
+          `${article.title} ${article.summary ?? ""}`.normalize("NFKC").toLocaleLowerCase().includes(normalizedQuery),
+        );
+      }
+
+      sendJson(response, 200, articles.slice(0, perPage));
+      return;
+    }
+
+    throw new ApiError(400, "bad_request", "Unsupported article source");
+  }
 
   if (source === "zenn") {
     const payload = await fetchCachedProviderJson({
@@ -216,6 +282,55 @@ async function handleArticlesRequest(requestUrl: URL, response: any) {
   }
 
   throw new ApiError(400, "bad_request", "Unsupported article source");
+}
+
+type ArticleListConditions = {
+  query: string | null;
+  tag: string | null;
+  page: number;
+  perPage: number;
+  order: "latest" | "daily";
+  isSearch: boolean;
+};
+
+function parseArticleListConditions(requestUrl: URL): ArticleListConditions {
+  const query = toNonEmptyString(requestUrl.searchParams.get("query"));
+  const tag = toNonEmptyString(requestUrl.searchParams.get("tag"));
+  const page = parseBoundedInteger(requestUrl.searchParams.get("page"), "page", 1, Number.MAX_SAFE_INTEGER, 1);
+  const perPage = parseBoundedInteger(requestUrl.searchParams.get("perPage"), "perPage", 1, 20, 8);
+  const rawOrder = requestUrl.searchParams.get("order") ?? (query || tag ? "latest" : "daily");
+
+  if (rawOrder !== "latest" && rawOrder !== "daily") {
+    throw new ApiError(400, "bad_request", "Unsupported article order");
+  }
+
+  return { query, tag, page, perPage, order: rawOrder, isSearch: Boolean(query || tag) };
+}
+
+function parseBoundedInteger(rawValue: string | null, name: string, minimum: number, maximum: number, fallback: number) {
+  if (rawValue === null) return fallback;
+  const value = Number(rawValue);
+  if (!Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new ApiError(400, "bad_request", `${name} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return value;
+}
+
+function createArticleSearchCacheKey(source: string, conditions: ArticleListConditions) {
+  return `articles:search:${JSON.stringify({
+    source,
+    query: conditions.query ?? "",
+    tag: conditions.tag ?? "",
+    page: conditions.page,
+    perPage: conditions.perPage,
+    order: conditions.order,
+  })}`;
+}
+
+function getZennArticlesPayload(payload: unknown): unknown[] {
+  if (isRecord(payload) && Array.isArray(payload.articles)) return payload.articles;
+  if (Array.isArray(payload)) return payload;
+  throw new ApiError(502, "unsupported_response_shape", "Zenn search response shape is not supported");
 }
 
 async function handleArticleFromUrlRequest(requestUrl: URL, response: any) {

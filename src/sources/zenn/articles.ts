@@ -1,6 +1,7 @@
 import { getApiErrorMessage } from "../../api/apiError";
 import type { Article } from "../../types/article";
 import type { RawArticleContentInput } from "../../types/articleContent";
+import type { ArticleSearchConditions } from "../qiita/articles";
 
 const ZENN_DAILY_POPULAR_ARTICLES_URL = "/api/articles?source=zenn&order=daily";
 const ZENN_ARTICLE_CONTENT_URL = "/api/article-content";
@@ -47,6 +48,28 @@ export async function fetchZennDailyPopularArticles(): Promise<Article[]> {
   } finally {
     zennDailyPopularArticlesRequest = null;
   }
+}
+
+export async function searchZennArticles(conditions: ArticleSearchConditions) {
+  const params = new URLSearchParams({
+    source: "zenn",
+    page: String(conditions.page),
+    perPage: String(conditions.perPage),
+    order: "latest",
+  });
+  const query = conditions.query.trim();
+  if (query) params.set("query", query);
+  if (conditions.tag) params.set("tag", conditions.tag.trim());
+
+  const response = await fetch(`/api/articles?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Zenn article search failed"));
+  }
+  const payload: unknown = await response.json();
+  if (!Array.isArray(payload)) throw new Error("Zenn articles response shape is not supported");
+  return payload.filter(isArticle);
 }
 
 export async function fetchZennArticleContent(
